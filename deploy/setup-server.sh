@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-time setup of Courier Hub on the server that already runs ParentVox.
-# After this, every push to main/dev deploys automatically (.github/workflows/deploy.yml).
+# The deploy workflow runs this automatically on the first deploy; after that it only updates.
 #
 #   sudo bash deploy/setup-server.sh prod courier.example.com
 #   sudo bash deploy/setup-server.sh dev  courier-dev.example.com
@@ -17,9 +17,8 @@ REPO="${REPO:-https://github.com/JaiPrakashRjp/LABcourier.git}"
 case "$ENV_NAME" in
   prod) NAME=courierhub;     DIR=/opt/courierhub;     BRANCH=main; API_PORT=8200; WEB_PORT=3200; DB=courier_hub ;;
   dev)  NAME=courierhub-dev; DIR=/opt/courierhub-dev; BRANCH=dev;  API_PORT=8210; WEB_PORT=3210; DB=courier_hub_dev ;;
-  *) echo "Usage: sudo bash $0 prod|dev <domain>"; exit 1 ;;
+  *) echo "Usage: sudo bash $0 prod|dev [domain]"; exit 1 ;;
 esac
-[ -n "$DOMAIN" ] || { echo "Give the domain, e.g. courier.example.com"; exit 1; }
 [ "$(id -u)" -eq 0 ] || { echo "Run with sudo"; exit 1; }
 
 DATA=/var/lib/$NAME
@@ -153,9 +152,11 @@ systemctl daemon-reload
 systemctl enable --now "$NAME-api" "$NAME-web" "$NAME-tracking"
 systemctl restart "$NAME-api" "$NAME-web" "$NAME-tracking"
 
-say "nginx site for $DOMAIN"
 SITE=/etc/nginx/sites-available/$NAME
-if [ ! -f "$SITE" ]; then
+if [ -z "$DOMAIN" ]; then
+  say "No domain given: skipping the nginx site (run this script again with a domain later)"
+elif [ ! -f "$SITE" ]; then
+  say "nginx site for $DOMAIN"
   cat > "$SITE" <<EOF
 server {
     listen 80;
@@ -178,10 +179,10 @@ server {
 }
 EOF
   ln -sf "$SITE" "/etc/nginx/sites-enabled/$NAME"
+  nginx -t && systemctl reload nginx
 else
   echo "Keeping existing $SITE"
 fi
-nginx -t && systemctl reload nginx
 
 say "Checking the API"
 for i in $(seq 1 20); do
@@ -192,10 +193,12 @@ done
 
 cat <<EOF
 
-Done. Next:
-  1. Point $DOMAIN's DNS (A record) at this server, then turn on HTTPS
-     (sign-in needs it because the session cookie is secure):
-       sudo certbot --nginx -d $DOMAIN
+Done. Courier Hub ($ENV_NAME) is running: API on 127.0.0.1:$API_PORT, website on 127.0.0.1:$WEB_PORT.
+Next:
+  1. Point your domain's DNS (A record) at this server. If you didn't give a domain, run:
+       sudo bash $DIR/deploy/setup-server.sh $ENV_NAME courier.your-domain.com
+     Then turn on HTTPS (sign-in needs it because the session cookie is secure):
+       sudo certbot --nginx -d ${DOMAIN:-courier.your-domain.com}
   2. Create the first admin:
        cd $DIR/backend && sudo -u www-data $DIR/venv/bin/python -m app.scripts.create_admin --company "Your Company" --name "Admin" --phone 9876543210
   3. Add courier API keys:

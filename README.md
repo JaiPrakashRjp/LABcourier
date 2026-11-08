@@ -150,24 +150,18 @@ Courier Hub runs on the same server as ParentVox, fully separate from it:
 | Database | `courier_hub` | `courier_hub_dev` |
 | Labels and photos | `/var/lib/courierhub` | `/var/lib/courierhub-dev` |
 
-**Once per environment**, on the server (needs git, Python 3.12, Node 20, PostgreSQL and nginx, which
-ParentVox already uses):
+Pushing to `main` or `dev` runs `.github/workflows/deploy.yml`. It needs the repository secrets
+`SERVER_HOST`, `SERVER_USER` and `SERVER_SSH_KEY`, and optionally the repository variables `DOMAIN` and
+`DEV_DOMAIN` (Settings → Secrets and variables → Actions → Variables).
 
-```bash
-git clone https://github.com/JaiPrakashRjp/LABcourier.git /tmp/courierhub-setup
-sudo bash /tmp/courierhub-setup/deploy/setup-server.sh prod courier.your-domain.com
-sudo bash /tmp/courierhub-setup/deploy/setup-server.sh dev  courier-dev.your-domain.com   # optional
-```
+- **First deploy:** it runs `deploy/setup-server.sh`, which creates the folder, database, `backend/.env` with new
+  secrets, the three services and, if a domain is set, an nginx site.
+- **Every deploy after that:** it checks the code, then pulls the branch, installs packages, runs database
+  migrations, builds the website, restarts the services and fails if the API doesn't come back.
 
-The script creates the database, `backend/.env` with new secrets, the three services and an nginx site, then
-prints the remaining steps: HTTPS with certbot, the first admin, and courier keys. Running it again keeps
-existing settings and data. If the repository is private, the server needs the same GitHub access that
-ParentVox's folders use.
-
-**Every deploy after that is automatic**: pushing to `main` or `dev` runs `.github/workflows/deploy.yml`. It checks
-the code, then over SSH pulls the branch, installs packages, runs database migrations, builds the website,
-restarts the services and fails if the API does not come back. It uses the same repository secrets as ParentVox:
-`SERVER_HOST`, `SERVER_USER` and `SERVER_SSH_KEY`.
+After the first deploy, on the server: turn on HTTPS with `sudo certbot --nginx -d <domain>`, create the first
+admin and add courier keys (the commands are at the end of the first deploy's log). To add a domain later, run
+`sudo bash /opt/courierhub/deploy/setup-server.sh prod <domain>`; it keeps existing settings and data.
 
 Logs: `journalctl -u courierhub-api -f` (or `-web`, `-tracking`).
 

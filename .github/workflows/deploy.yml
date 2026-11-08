@@ -60,10 +60,14 @@ jobs:
             echo "dir=/opt/courierhub"         >> $GITHUB_OUTPUT
             echo "name=courierhub"             >> $GITHUB_OUTPUT
             echo "port=8200"                   >> $GITHUB_OUTPUT
+            echo "env=prod"                    >> $GITHUB_OUTPUT
+            echo "domain=${{ vars.DOMAIN }}"   >> $GITHUB_OUTPUT
           else
             echo "dir=/opt/courierhub-dev"     >> $GITHUB_OUTPUT
             echo "name=courierhub-dev"         >> $GITHUB_OUTPUT
             echo "port=8210"                   >> $GITHUB_OUTPUT
+            echo "env=dev"                     >> $GITHUB_OUTPUT
+            echo "domain=${{ vars.DEV_DOMAIN }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Deploy via SSH
@@ -75,6 +79,17 @@ jobs:
           command_timeout: 20m
           script: |
             set -e
+
+            # First deploy only: create everything (folder, database, .env, services, nginx), then stop.
+            # Runs again if a previous first deploy stopped half-way.
+            if [ ! -f /etc/systemd/system/${{ steps.env.outputs.name }}-api.service ]; then
+              [ -d ${{ steps.env.outputs.dir }}/.git ] || git clone --branch ${{ github.ref_name }} https://github.com/${{ github.repository }}.git ${{ steps.env.outputs.dir }}
+              git -C ${{ steps.env.outputs.dir }} fetch origin ${{ github.ref_name }}
+              git -C ${{ steps.env.outputs.dir }} reset --hard origin/${{ github.ref_name }}
+              bash ${{ steps.env.outputs.dir }}/deploy/setup-server.sh ${{ steps.env.outputs.env }} "${{ steps.env.outputs.domain }}"
+              exit 0
+            fi
+
             cd ${{ steps.env.outputs.dir }}
 
             # Exactly what is on GitHub (server-only files like .env are untracked and kept).
