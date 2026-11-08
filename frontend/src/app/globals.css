@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-canvas font-sans text-neutral-900 antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  /* No double-tap zoom delay on anything people press. */
+  a,
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="radio"],
+  label,
+  summary {
+    touch-action: manipulation;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tight;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500/40 ring-offset-2 ring-offset-white;
+  }
+  ::selection {
+    @apply bg-brand-200 text-brand-950;
+  }
+  /* Slim, quiet scrollbars. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(0 0 0 / 0.18) transparent;
+  }
+}
+
+@layer components {
+  .text-gradient {
+    @apply bg-gradient-to-r from-neutral-900 via-neutral-700 to-brand-600 bg-clip-text text-transparent;
+  }
+  .bg-grid {
+    background-image: linear-gradient(to right, rgb(255 255 255 / 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.06) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+  .bg-dots {
+    background-image: radial-gradient(rgb(0 0 0 / 0.08) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+  .skeleton {
+    @apply rounded-md bg-[linear-gradient(90deg,#ececec_25%,#f6f6f6_37%,#ececec_63%)] bg-[length:400%_100%] animate-shimmer;
+  }
+  /* White card that lifts slightly on hover. */
+  .card-hover {
+    @apply transition-[transform,box-shadow,border-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-lift;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

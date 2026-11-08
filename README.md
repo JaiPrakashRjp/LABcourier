@@ -137,6 +137,40 @@ Shadowfax doesn't resend a missed update, so the tracking checker also asks for 
   later, every session for that user is ended, which stops a copied cookie being reused.
 - Signing out in one tab signs out every tab.
 
+## Deploying to the server
+
+Courier Hub runs on the same server as ParentVox, fully separate from it:
+
+| | Production | Development |
+|---|---|---|
+| Branch | `main` | `dev` |
+| Folder | `/opt/courierhub` | `/opt/courierhub-dev` |
+| API / website ports | 8200 / 3200 | 8201 / 3201 |
+| Services | `courierhub-api`, `courierhub-web`, `courierhub-tracking` | same names ending in `-dev` |
+| Database | `courier_hub` | `courier_hub_dev` |
+| Labels and photos | `/var/lib/courierhub` | `/var/lib/courierhub-dev` |
+
+**Once per environment**, on the server (needs git, Python 3.12, Node 20, PostgreSQL and nginx, which
+ParentVox already uses):
+
+```bash
+git clone https://github.com/JaiPrakashRjp/LABcourier.git /tmp/courierhub-setup
+sudo bash /tmp/courierhub-setup/deploy/setup-server.sh prod courier.your-domain.com
+sudo bash /tmp/courierhub-setup/deploy/setup-server.sh dev  courier-dev.your-domain.com   # optional
+```
+
+The script creates the database, `backend/.env` with new secrets, the three services and an nginx site, then
+prints the remaining steps: HTTPS with certbot, the first admin, and courier keys. Running it again keeps
+existing settings and data. If the repository is private, the server needs the same GitHub access that
+ParentVox's folders use.
+
+**Every deploy after that is automatic**: pushing to `main` or `dev` runs `.github/workflows/deploy.yml`. It checks
+the code, then over SSH pulls the branch, installs packages, runs database migrations, builds the website,
+restarts the services and fails if the API does not come back. It uses the same repository secrets as ParentVox:
+`SERVER_HOST`, `SERVER_USER` and `SERVER_SSH_KEY`.
+
+Logs: `journalctl -u courierhub-api -f` (or `-web`, `-tracking`).
+
 ## Adding a courier
 
 1. Write `backend/app/couriers/<name>.py`, a subclass of `CourierAdapter` (quote, book, labels, track, and
