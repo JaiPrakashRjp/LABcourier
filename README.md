@@ -145,7 +145,7 @@ Courier Hub runs on the same server as ParentVox, fully separate from it:
 |---|---|---|
 | Branch | `main` | `dev` |
 | Folder | `/opt/courierhub` | `/opt/courierhub-dev` |
-| API / website ports | 8200 / 3200 | 8201 / 3201 |
+| API / website ports | 8200 / 3200 | 8210 / 3210 |
 | Services | `courierhub-api`, `courierhub-web`, `courierhub-tracking` | same names ending in `-dev` |
 | Database | `courier_hub` | `courier_hub_dev` |
 | Labels and photos | `/var/lib/courierhub` | `/var/lib/courierhub-dev` |

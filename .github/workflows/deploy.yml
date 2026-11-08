@@ -63,7 +63,7 @@ jobs:
           else
             echo "dir=/opt/courierhub-dev"     >> $GITHUB_OUTPUT
             echo "name=courierhub-dev"         >> $GITHUB_OUTPUT
-            echo "port=8201"                   >> $GITHUB_OUTPUT
+            echo "port=8210"                   >> $GITHUB_OUTPUT
           fi
 
       - name: Deploy via SSH

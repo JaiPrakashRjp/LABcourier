@@ -16,7 +16,7 @@ REPO="${REPO:-https://github.com/JaiPrakashRjp/LABcourier.git}"
 
 case "$ENV_NAME" in
   prod) NAME=courierhub;     DIR=/opt/courierhub;     BRANCH=main; API_PORT=8200; WEB_PORT=3200; DB=courier_hub ;;
-  dev)  NAME=courierhub-dev; DIR=/opt/courierhub-dev; BRANCH=dev;  API_PORT=8201; WEB_PORT=3201; DB=courier_hub_dev ;;
+  dev)  NAME=courierhub-dev; DIR=/opt/courierhub-dev; BRANCH=dev;  API_PORT=8210; WEB_PORT=3210; DB=courier_hub_dev ;;
   *) echo "Usage: sudo bash $0 prod|dev <domain>"; exit 1 ;;
 esac
 [ -n "$DOMAIN" ] || { echo "Give the domain, e.g. courier.example.com"; exit 1; }
