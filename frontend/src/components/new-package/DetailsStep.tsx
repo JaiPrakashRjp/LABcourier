@@ -82,6 +82,12 @@ function validate(d: Draft): string {
   const w = Number(d.weight_g);
   if (!Number.isInteger(w) || w < 1 || w > 35000) return "Enter the weight in whole grams (1 to 35,000)";
   if (d.contents.trim().length < 2) return "Describe the contents";
+  // Couriers take at most 150 cm on any side; say which box is wrong.
+  for (const [key, label] of [["length_cm", "Length"], ["breadth_cm", "Breadth"], ["height_cm", "Height"]] as const) {
+    if (!d[key].trim()) continue;
+    const v = Number(d[key]);
+    if (!(v > 0) || v > 150) return `${label} must be between 1 and 150 cm`;
+  }
   if (d.payment_mode === "COD" && !(Number(d.cod_amount) > 0)) return "Enter the COD amount";
   return "";
 }

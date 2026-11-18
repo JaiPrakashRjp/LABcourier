@@ -1,12 +1,14 @@
 "use client";
 
-import { Building2, MapPin, Phone, Plus, Search, Stethoscope, Users } from "lucide-react";
+import { Building2, MapPin, Pencil, Phone, Plus, Search, Stethoscope, Trash2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { api, errorMessage } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { useUrlState } from "@/lib/useUrlState";
 import type { City, Page, Person, PersonKind, State } from "@/lib/types";
 import { PersonForm } from "./PersonForm";
-import { Alert, Avatar, Button, Card, EmptyState, Input, PageHeader, Pagination, Select, TableSkeleton, cx, table } from "./ui";
+import { Alert, Avatar, Button, Card, EmptyState, Input, Modal, PageHeader, Pagination, Select, TableSkeleton, cx, table } from "./ui";
 
 const LIMIT = 25;
 const LABELS: Record<PersonKind, { title: string; subtitle: string; add: string; detail: string; icon: React.ElementType }> = {
@@ -23,6 +25,35 @@ export function PeopleDirectory({ kind }: { kind: PersonKind }) {
   const offset = Number(values.offset ?? 0);
   const [q, setQ] = useState(values.q ?? "");
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Person | null>(null);
+  const [deleting, setDeleting] = useState<Person | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  async function remove() {
+    if (!deleting) return;
+    setRemoving(true);
+    try {
+      await api(`/${kind}/${deleting.id}`, { method: "DELETE" });
+      toast.success(`${deleting.name} deleted`);
+      setDeleting(null);
+      void reload();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  const actions = (p: Person) => (
+    <div className="flex justify-end gap-1">
+      <Button variant="ghost" size="sm" onClick={() => setEditing(p)} aria-label={`Edit ${p.name}`}>
+        <Pencil className="h-4 w-4" /> Edit
+      </Button>
+      <Button variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50 hover:text-rose-700" onClick={() => setDeleting(p)} aria-label={`Delete ${p.name}`}>
+        <Trash2 className="h-4 w-4" /> Delete
+      </Button>
+    </div>
+  );
 
   useEffect(() => setQ(values.q ?? ""), [values.q]);
 
@@ -84,6 +115,7 @@ export function PeopleDirectory({ kind }: { kind: PersonKind }) {
                   <th className={table.th}>Phone</th>
                   <th className={table.th}>Address</th>
                   <th className={table.th}>Location</th>
+                  <th className={cx(table.th, "text-right")}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -107,6 +139,7 @@ export function PeopleDirectory({ kind }: { kind: PersonKind }) {
                       <span className="font-medium text-neutral-800">{p.city_name}</span>
                       <span className="block text-xs text-neutral-500">{p.state_name} · {p.pincode}</span>
                     </td>
+                    <td className={table.td}>{actions(p)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -124,6 +157,7 @@ export function PeopleDirectory({ kind }: { kind: PersonKind }) {
                 </div>
                 <p className="mt-3 flex items-center gap-1.5 text-sm text-neutral-600"><Phone className="h-3.5 w-3.5" /> +91 {p.phone}</p>
                 <p className="mt-1 flex items-start gap-1.5 text-sm text-neutral-600"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {p.address_line1}, {p.city_name} {p.pincode}</p>
+                <div className="mt-3 border-t border-neutral-100 pt-2">{actions(p)}</div>
               </li>
             ))}
           </ul>
@@ -132,6 +166,21 @@ export function PeopleDirectory({ kind }: { kind: PersonKind }) {
       )}
 
       <PersonForm kind={kind} open={adding} onClose={() => setAdding(false)} onCreated={() => void reload()} />
+      <PersonForm kind={kind} open={!!editing} editing={editing} onClose={() => setEditing(null)} onCreated={() => void reload()} />
+
+      <Modal
+        open={!!deleting}
+        title={`Delete ${deleting?.name ?? ""}?`}
+        description="They won't appear in lists or new packages. Packages already sent are not affected."
+        onClose={() => !removing && setDeleting(null)}
+      >
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end [&>*]:w-full sm:[&>*]:w-auto">
+          <Button variant="secondary" onClick={() => setDeleting(null)} disabled={removing}>Cancel</Button>
+          <Button variant="danger" onClick={() => void remove()} loading={removing}>
+            <Trash2 className="h-4 w-4" /> Delete
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

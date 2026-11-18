@@ -98,7 +98,9 @@ def run_return(return_id: int) -> None:
                 prefix, serial, country = couriers_dao.allocate_serials(db, key.id, 1)[0]
                 rs.tracking_number = make_barcode(prefix, serial, country)
                 db.commit()
-            result = adapter.book_return(booking_item(rs, original.batch))
+            item = booking_item(rs, original.batch)
+            item.return_reason = _reason_text(req)
+            result = adapter.book_return(item)
         except (CourierError, ValueError) as exc:
             result = None
             error = str(exc)
@@ -118,7 +120,8 @@ def run_return(return_id: int) -> None:
                 description=f"Return booked with {rs.provider.name}", location=None, event_at=now,
                 source=EventSource.SYSTEM, raw=result.raw,
             )
-            _return_label(db, adapter, rs, original)
+            if adapter.return_needs_label:
+                _return_label(db, adapter, rs, original)
         else:
             rs.status = ShipmentStatus.BOOKING_FAILED
             rs.booking_error = error
@@ -132,6 +135,14 @@ def run_return(return_id: int) -> None:
         db.rollback()
     finally:
         db.close()
+
+
+def _reason_text(req: ReturnRequest) -> str:
+    """'DAMAGED' plus notes becomes 'Damaged: crown cracked', as sent to the courier."""
+    text = str(req.reason).replace("_", " ").capitalize()
+    if req.notes:
+        text = f"{text}: {req.notes}"
+    return text[:200]
 
 
 def _return_label(db: Session, adapter, rs: Shipment, original: Shipment) -> None:

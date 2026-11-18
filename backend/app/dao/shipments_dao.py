@@ -143,6 +143,28 @@ def get_batch(db: Session, company_id: int, batch_id: int, lock: bool = False) -
     return db.scalars(stmt).unique().first()
 
 
+def unbooked_batches(db: Session, company_id: int, statuses: list[str]) -> list[ShipmentBatch]:
+    """Package requests saved but not booked yet, newest first."""
+    return list(db.scalars(
+        select(ShipmentBatch)
+        .where(ShipmentBatch.company_id == company_id, ShipmentBatch.status.in_(statuses))
+        .options(selectinload(ShipmentBatch.shipments))
+        .order_by(ShipmentBatch.created_at.desc())
+    ).unique())
+
+
+def delete_batch(db: Session, batch: ShipmentBatch) -> None:
+    """Removes an unbooked request with its draft shipments and saved prices."""
+    ids = [s.id for s in batch.shipments]
+    if ids:
+        db.query(ShipmentQuote).filter(ShipmentQuote.shipment_id.in_(ids)).delete(synchronize_session=False)
+        db.query(ShipmentEvent).filter(ShipmentEvent.shipment_id.in_(ids)).delete(synchronize_session=False)
+    for shipment in list(batch.shipments):
+        db.delete(shipment)
+    db.flush()
+    db.delete(batch)
+
+
 def add_shipment(db: Session, **values) -> Shipment:
     shipment = Shipment(**values)
     db.add(shipment)

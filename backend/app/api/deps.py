@@ -16,13 +16,13 @@ DB = Annotated[Session, Depends(get_db)]
 
 def current_user(db: DB, authorization: Annotated[str | None, Header()] = None) -> User:
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise Unauthorized("Not signed in")
+        raise Unauthorized("Please sign in to continue.")
     try:
         payload = decode_access_token(authorization.split(" ", 1)[1])
     except jwt.ExpiredSignatureError as exc:
-        raise Unauthorized("Session expired") from exc
+        raise Unauthorized("Your session has expired. Please sign in again.") from exc
     except jwt.InvalidTokenError as exc:
-        raise Unauthorized("Not signed in") from exc
+        raise Unauthorized("Please sign in to continue.") from exc
     user = users_dao.get_user(db, int(payload["sub"]))
     if not user or not user.is_active:
         raise Unauthorized("Account is disabled")

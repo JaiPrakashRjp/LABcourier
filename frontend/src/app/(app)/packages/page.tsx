@@ -19,6 +19,7 @@ import {
   cx,
   table,
 } from "@/components/ui";
+import { DraftsPanel } from "@/components/DraftsPanel";
 import { useAuth } from "@/lib/auth";
 import { STATUS_FILL, STATUS_LABELS, STATUS_ORDER, dateOnly, money } from "@/lib/format";
 import { ROLES, type City, type Courier, type Page, type Person, type Shipment, type State } from "@/lib/types";
@@ -77,6 +78,8 @@ export default function PackagesPage() {
         subtitle={isAdmin ? "Every package and return across all couriers." : "Packages sent to you, and their returns."}
         actions={isAdmin && <LinkButton href="/packages/new"><PackagePlus className="h-4 w-4" /> New package</LinkButton>}
       />
+
+      {isAdmin && <DraftsPanel />}
 
       <Card className="mb-5 space-y-4 p-4 sm:p-5">
         <div className="flex flex-wrap gap-2">

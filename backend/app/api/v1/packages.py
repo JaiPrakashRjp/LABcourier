@@ -13,13 +13,15 @@ from app.schemas.packages import (
     BatchOut,
     BatchQuotesOut,
     BookIn,
+    DraftOut,
     ReturnIn,
     ReturnOut,
     ShipmentDetailOut,
     ShipmentOut,
 )
 from app.services import booking_service, label_service, quote_service, return_service, tracking_service
-from app.services.errors import NotFound
+from app.core.constants import BatchStatus
+from app.services.errors import AppError, NotFound
 from app.services.shipment_view import batch_out, return_out, shipment_detail, shipment_out
 
 router = APIRouter(tags=["packages"])
@@ -38,6 +40,31 @@ def couriers(user: CurrentUser, db: DB) -> list[dict]:
 @router.post("/batches", response_model=BatchOut, status_code=201)
 def create_batch(data: BatchCreateIn, user: AdminUser, db: DB):
     return batch_out(quote_service.create_batch(db, user, data), user)
+
+
+UNBOOKED = [BatchStatus.DRAFT, BatchStatus.QUOTED]
+
+
+@router.get("/batches/drafts", response_model=list[DraftOut])
+def drafts(user: AdminUser, db: DB):
+    """Package requests saved but not booked, so they can be continued or deleted."""
+    return [
+        DraftOut(id=b.id, lab_name=b.lab.name, contents=b.contents, weight_g=b.weight_g, status=b.status,
+                 total_count=b.total_count, recipients=[s.to_address["name"] for s in b.shipments],
+                 created_at=b.created_at)
+        for b in shipments_dao.unbooked_batches(db, user.company_id, UNBOOKED)
+    ]
+
+
+@router.delete("/batches/{batch_id}", status_code=204)
+def delete_draft(batch_id: int, user: AdminUser, db: DB) -> None:
+    batch = shipments_dao.get_batch(db, user.company_id, batch_id, lock=True)
+    if not batch:
+        raise NotFound("Package request not found")
+    if batch.status not in UNBOOKED:
+        raise AppError("Only packages that are not booked yet can be deleted")
+    shipments_dao.delete_batch(db, batch)
+    db.commit()
 
 
 @router.get("/batches/{batch_id}", response_model=BatchOut)

@@ -176,9 +176,12 @@ Nothing else changes: price comparison, one-click booking, tracking, returns and
 
 ## Known gaps
 
-- **Unverified courier details:** the India Post label and return booking, and Shadowfax's weight fields and
-  webhook format, follow their docs but haven't been tested against the live courier APIs.
+- **Unverified courier details:** the India Post label and return booking, and Shadowfax's calls, follow their
+  docs but haven't been tested against the live courier APIs.
+- **Shadowfax webhook format:** each Shadowfax account has its own callback template. Ask Shadowfax to include
+  `awb_number`, `status_id`, `remarks`, `current_location` and `last_updated_iso`.
 - **India Post returns:** there's no return API, so a return is booked as a new shipment from the recipient back
   to the lab.
-- **Shadowfax returns:** these use the same approach until its reverse-pickup API is added.
+- **Shadowfax returns** use its reverse pickup service: a rider collects from the dentist with no label to print.
+  Return photos stay in Courier Hub and aren't sent to Shadowfax.
 - **Sign-up check:** sign-up matches the phone number only. Add an SMS OTP before going live publicly.

@@ -14,8 +14,9 @@ credentials:
     booking_office_name / booking_office_pin   printed on labels
 """
 
-import time
 from datetime import datetime, timedelta
+import logging
+import time
 
 import httpx
 
@@ -31,6 +32,8 @@ from app.couriers.base import (
     TrackingResult,
 )
 from app.couriers.utils import IST, parse_date, parse_datetime
+
+log = logging.getLogger(__name__)
 
 UAT_BASE_URL = "https://test.cept.gov.in"
 TOKEN_LIFETIME_SECONDS = 14 * 60  # tokens last 15 minutes; renew a minute early
@@ -111,22 +114,35 @@ class IndiaPostAdapter(CourierAdapter):
         cached = _token_cache.get(self.credentials.api_key_id)
         if cached and cached[1] > time.time():
             return cached[0]
-        resp = httpx.post(
-            f"{self.base_url}/beextcustomer/v1/access/login",
-            json={"username": self.credentials.username, "password": self.credentials.password},
-            timeout=30,
-        )
-        body = resp.json() if resp.content else {}
+        try:
+            resp = httpx.post(
+                f"{self.base_url}/beextcustomer/v1/access/login",
+                json={"username": self.credentials.username, "password": self.credentials.password},
+                timeout=30,
+            )
+        except httpx.HTTPError as exc:
+            log.warning("India Post login call failed: %s", exc)
+            raise CourierError("Couldn't reach India Post right now. Please try again in a few minutes.") from exc
+        try:
+            body = resp.json() if resp.content else {}
+        except ValueError:
+            body = {}
         token = (body.get("data") or {}).get("access_token")
         if resp.status_code != 200 or not token:
-            raise CourierError(f"India Post login failed: {body.get('message') or resp.status_code}")
+            log.warning("India Post login rejected: %s %s", resp.status_code, resp.text[:300])
+            raise CourierError("India Post did not accept the saved login. Ask your admin to check the India Post "
+                               "username and password.")
         _token_cache[self.credentials.api_key_id] = (token, time.time() + TOKEN_LIFETIME_SECONDS)
         return token
 
     def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
         for attempt in range(2):
             headers = {"Authorization": f"Bearer {self._token()}"}
-            resp = httpx.request(method, f"{self.base_url}{path}", headers=headers, timeout=60, **kwargs)
+            try:
+                resp = httpx.request(method, f"{self.base_url}{path}", headers=headers, timeout=60, **kwargs)
+            except httpx.HTTPError as exc:
+                log.warning("India Post call %s failed: %s", path, exc)
+                raise CourierError("Couldn't reach India Post right now. Please try again in a few minutes.") from exc
             if resp.status_code == 401 and attempt == 0:
                 _token_cache.pop(self.credentials.api_key_id, None)
                 continue
@@ -186,7 +202,8 @@ class IndiaPostAdapter(CourierAdapter):
         key = "BP" if st in ("BP", "BUSINESS_PARCEL") else ("SP" if st.startswith("SP") else st)
         contract = contracts.get(st) or contracts.get(key)
         if not contract:
-            raise CourierError(f"No India Post contract id set up for {st}")
+            raise CourierError(f"India Post isn't fully set up for the {st} service yet (contract id missing). "
+                               "Ask your admin to add it.")
         return str(contract)
 
     def _article(self, item: BookingItem) -> dict:
@@ -332,7 +349,8 @@ class IndiaPostAdapter(CourierAdapter):
             } for item, tracking in chunk]
             resp = self._request("POST", "/beextcustomer/v1/label/create/domestic", json=payload)
             if resp.status_code != 200 or not resp.content.startswith(b"%PDF"):
-                raise CourierError(f"India Post label call failed: {resp.status_code} {resp.text[:200]}")
+                log.warning("India Post label failed: %s %s", resp.status_code, resp.text[:300])
+                raise CourierError("India Post couldn't create the label right now. Please try again in a few minutes.")
             pdfs.append(resp.content)
         return pdfs
 
@@ -346,7 +364,9 @@ class IndiaPostAdapter(CourierAdapter):
             try:
                 body = resp.json()
             except ValueError as exc:
-                raise CourierError(f"India Post tracking returned an unreadable response: {resp.status_code}") from exc
+                log.warning("India Post tracking unreadable: %s %s", resp.status_code, resp.text[:300])
+                raise CourierError("India Post tracking isn't responding properly right now. We'll try again "
+                                   "automatically.") from exc
             for row in body.get("data") or []:
                 number = (row.get("booking_details") or {}).get("article_number")
                 if not number:

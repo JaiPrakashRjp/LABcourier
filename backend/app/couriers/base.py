@@ -92,6 +92,8 @@ class BookingItem:
     parcel: Parcel
     # Pre-assigned tracking number, for couriers where we generate it (India Post).
     tracking_number: str | None = None
+    # Set on return bookings: why the package is coming back.
+    return_reason: str | None = None
 
 
 @dataclass
@@ -121,6 +123,8 @@ class TrackingResult:
     tracking_number: str
     events: list[TrackingEvent] = field(default_factory=list)
     expected_date: date | None = None
+    # The current status, used when the courier sends it without an event history.
+    current: TrackingEvent | None = None
 
 
 class CourierAdapter(ABC):
@@ -130,6 +134,8 @@ class CourierAdapter(ABC):
     supports_cancel: bool = False
     # True when the courier needs us to supply the tracking number before booking.
     needs_tracking_number: bool = False
+    # False when the courier's rider collects returns without a printed label.
+    return_needs_label: bool = True
 
     def __init__(self, credentials: Credentials):
         self.credentials = credentials
@@ -163,6 +169,17 @@ class CourierAdapter(ABC):
     def book_return(self, item: BookingItem) -> BookingResult:
         """Book the return leg. By default this is a normal booking from the recipient back to the lab."""
         return self.book_bulk([item])[0]
+
+    def track_returns(self, tracking_numbers: list[str]) -> list[TrackingResult]:
+        """Track return bookings. Couriers with a separate returns service override this."""
+        return self.track(tracking_numbers)
+
+    def cancel_return(self, tracking_number: str) -> None:
+        self.cancel(tracking_number)
+
+    def return_status(self, code: str) -> ShipmentStatus | None:
+        """Status of a webhook code on a return booking, when it differs from the forward meaning."""
+        return None
 
     def parse_webhook(self, payload: dict | list) -> list[tuple[str, TrackingEvent]]:
         raise NotSupported(f"{self.code} webhooks are not supported")

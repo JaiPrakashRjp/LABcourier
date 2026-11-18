@@ -150,6 +150,18 @@ class BatchOut(BaseModel):
     shipments: list[ShipmentOut]
 
 
+class DraftOut(BaseModel):
+    """A package request that was saved but not booked."""
+    id: int
+    lab_name: str
+    contents: str
+    weight_g: int
+    status: str
+    total_count: int
+    recipients: list[str]
+    created_at: datetime
+
+
 class ReturnIn(BaseModel):
     reason: ReturnReason
     notes: str | None = Field(default=None, max_length=1000)

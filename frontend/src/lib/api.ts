@@ -97,12 +97,44 @@ async function send(path: string, opts: RequestOptions): Promise<Response> {
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(opts.body);
   }
-  return fetch(`/api/v1${path}${buildQuery(opts.query)}`, {
-    method: opts.method ?? (body ? "POST" : "GET"),
-    headers,
-    body,
-    credentials: "same-origin",
-  });
+  try {
+    return await fetch(`/api/v1${path}${buildQuery(opts.query)}`, {
+      method: opts.method ?? (body ? "POST" : "GET"),
+      headers,
+      body,
+      credentials: "same-origin",
+    });
+  } catch {
+    // fetch only throws when the request never reached the server.
+    throw new ApiError(
+      0,
+      typeof navigator !== "undefined" && !navigator.onLine
+        ? "You're offline. Check your internet connection and try again."
+        : "Can't reach the server right now. Please check your connection and try again.",
+      [],
+    );
+  }
+}
+
+/** Plain-English fallbacks for when the server doesn't send its own message. */
+const STATUS_MESSAGES: Record<number, string> = {
+  400: "Something in the request isn't right. Please check and try again.",
+  401: "Your session has ended. Please sign in again.",
+  403: "You don't have permission to do this.",
+  404: "We couldn't find what you were looking for.",
+  408: "The server took too long to answer. Please try again.",
+  409: "This conflicts with existing data. Please refresh and try again.",
+  413: "The upload is too large.",
+  422: "Please check the highlighted fields.",
+  429: "Too many attempts. Please wait a moment and try again.",
+  500: "Something went wrong on our side. Please try again in a minute.",
+  502: "The server is restarting or busy. Please try again in a minute.",
+  503: "The server is temporarily unavailable. Please try again in a minute.",
+  504: "The server took too long to answer. Please try again.",
+};
+
+export function statusMessage(status: number): string {
+  return STATUS_MESSAGES[status] ?? (status >= 500 ? STATUS_MESSAGES[500] : "Something went wrong. Please try again.");
 }
 
 export async function api<T = unknown>(path: string, opts: RequestOptions = {}): Promise<T> {
@@ -114,11 +146,11 @@ export async function api<T = unknown>(path: string, opts: RequestOptions = {}):
     if (session) res = await send(path, opts);
   }
   if (!res.ok) {
-    let message = `Request failed (${res.status})`;
+    let message = statusMessage(res.status);
     let fields: { field: string; message: string }[] = [];
     try {
       const data = await res.json();
-      if (typeof data.detail === "string") message = data.detail;
+      if (typeof data.detail === "string" && data.detail.trim()) message = data.detail;
       fields = data.errors ?? [];
     } catch {
       /* not JSON */
@@ -148,6 +180,7 @@ export async function openFile(path: string, filename?: string) {
 
 export function errorMessage(err: unknown): string {
   if (err instanceof ApiError) return err.message;
-  if (err instanceof Error) return err.message;
-  return "Something went wrong";
+  // Browser errors (e.g. "Failed to fetch") are technical; show a plain sentence instead.
+  if (err instanceof Error && err.message && !/fetch|network|load failed|undefined|null|JSON/i.test(err.message)) return err.message;
+  return "Something went wrong. Please try again.";
 }

@@ -34,7 +34,15 @@ def _router(prefix: str, model, payload):
     def create(data: payload, user: AdminUser, db: DB):  # type: ignore[valid-type]
         return people_service.create(db, user, model, data)
 
+    def update(record_id: int, data: payload, user: AdminUser, db: DB):  # type: ignore[valid-type]
+        return people_service.update(db, user, model, record_id, data)
+
+    @router.delete("/{record_id}", status_code=204)
+    def delete(record_id: int, user: AdminUser, db: DB) -> None:
+        people_service.delete(db, user, model, record_id)
+
     router.add_api_route("", create, methods=["POST"], response_model=PersonOut, status_code=201)
+    router.add_api_route("/{record_id}", update, methods=["PUT"], response_model=PersonOut)
     return router
 
 

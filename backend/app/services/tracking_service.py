@@ -14,7 +14,7 @@ from app.core.constants import (
     ShipmentStatus,
     TRACKABLE_STATUSES,
 )
-from app.couriers.base import Credentials, TrackingEvent
+from app.couriers.base import Credentials, TrackingEvent, TrackingResult
 from app.couriers.registry import get_adapter
 from app.dao import couriers_dao, shipments_dao
 from app.models import CourierProvider, ReturnRequest, Shipment, WebhookLog
@@ -68,6 +68,26 @@ def _complete_return(db: Session, return_shipment: Shipment) -> None:
             parent.status = ShipmentStatus.RETURNED
 
 
+def _track(adapter, shipments: list[Shipment]) -> list[TrackingResult]:
+    """Returns may use a separate courier service, so they are tracked separately."""
+    results = []
+    forward = [s.tracking_number for s in shipments if s.direction != Direction.RETURN]
+    returns = [s.tracking_number for s in shipments if s.direction == Direction.RETURN]
+    if forward:
+        results += adapter.track(forward)
+    if returns:
+        results += adapter.track_returns(returns)
+    return results
+
+
+def apply_result(db: Session, shipment: Shipment, result: TrackingResult) -> int:
+    events = result.events
+    # Some couriers send only the current status; record it when it changes.
+    if not events and result.current and result.current.status != shipment.status:
+        events = [result.current]
+    return apply_events(db, shipment, events, EventSource.POLL, result.expected_date)
+
+
 def poll(db: Session, limit: int = 2000) -> int:
     """Ask each courier for the latest status of every package still on the move."""
     shipments = shipments_dao.trackable(db, [s.value for s in TRACKABLE_STATUSES], limit)
@@ -80,7 +100,7 @@ def poll(db: Session, limit: int = 2000) -> int:
         key = couriers_dao.get_api_key(db, api_key_id)
         try:
             adapter = courier_service.adapter_for_key(key)
-            results = adapter.track([s.tracking_number for s in items])
+            results = _track(adapter, items)
         except Exception as exc:  # noqa: BLE001 - one courier failing must not stop the others
             log.warning("Tracking failed for courier account %s: %s", api_key_id, exc)
             continue
@@ -88,7 +108,7 @@ def poll(db: Session, limit: int = 2000) -> int:
         for result in results:
             s = by_number.get(result.tracking_number)
             if s:
-                updated += bool(apply_events(db, s, result.events, EventSource.POLL, result.expected_date))
+                updated += bool(apply_result(db, s, result))
         db.commit()
     return updated
 
@@ -97,9 +117,9 @@ def refresh_one(db: Session, shipment: Shipment) -> None:
     if not shipment.tracking_number or not shipment.api_key_id:
         return
     adapter = courier_service.adapter_for_shipment(db, shipment)
-    for result in adapter.track([shipment.tracking_number]):
+    for result in _track(adapter, [shipment]):
         if result.tracking_number == shipment.tracking_number:
-            apply_events(db, shipment, result.events, EventSource.POLL, result.expected_date)
+            apply_result(db, shipment, result)
     db.commit()
 
 
@@ -117,6 +137,9 @@ def handle_webhook(db: Session, provider_code: str, payload: dict | list) -> int
         for tracking_number, event in adapter.parse_webhook(payload):
             shipment = shipments_dao.find_by_tracking(db, provider.id, tracking_number)
             if shipment:
+                # The same code can mean something else on a return (e.g. "returned to seller" = back at the lab).
+                if shipment.direction == Direction.RETURN:
+                    event.status = adapter.return_status(event.code) or event.status
                 updated += apply_events(db, shipment, [event], EventSource.WEBHOOK)
         entry.processed = True
         db.commit()

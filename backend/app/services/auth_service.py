@@ -112,7 +112,7 @@ def signup(db: Session, data: SignupIn, user_agent: str | None, ip: str | None) 
 
 def refresh(db: Session, raw_token: str | None, user_agent: str | None, ip: str | None) -> IssuedSession:
     if not raw_token:
-        raise Unauthorized("Not signed in")
+        raise Unauthorized("Please sign in to continue.")
     token = users_dao.get_refresh_token(db, hash_token(raw_token))
     if not token:
         raise Unauthorized("Session expired. Please sign in again.")

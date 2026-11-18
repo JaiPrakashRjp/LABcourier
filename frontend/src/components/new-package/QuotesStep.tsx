@@ -40,12 +40,13 @@ export function QuotesStep({ batch, onBooked }: { batch: Batch; onBooked: (b: Ba
 
   // Who the chosen courier can't reach, and where they will go instead.
   const plan = useMemo(() => {
-    if (!quotes || provider === null) return [];
+    if (!quotes) return [];
+    // Rows show even when no courier is chosen, so people can see why a pincode can't be reached.
     return quotes.recipients.map((r) => {
       const wanted = overrides[r.shipment_id] ?? provider;
       const usable = r.quotes.filter((q) => q.serviceable && q.total !== null);
       const chosen = usable.find((q) => q.provider_id === wanted) ?? [...usable].sort((a, b) => a.total! - b.total!)[0];
-      return { recipient: r, chosen, moved: !!chosen && chosen.provider_id !== wanted, usable };
+      return { recipient: r, chosen, moved: !!chosen && wanted !== null && chosen.provider_id !== wanted, usable };
     });
   }, [quotes, provider, overrides]);
 
@@ -130,6 +131,15 @@ export function QuotesStep({ batch, onBooked }: { batch: Batch; onBooked: (b: Ba
                         <div className="h-full rounded-full bg-emerald-500" style={{ width: `${all ? (o.serviceable_count / all) * 100 : 0}%` }} />
                       </div>
                     </div>
+                    {o.serviceable_count === 0 && (() => {
+                      // Say why this courier can't be used, e.g. no API key or pincode not served.
+                      const reasons = [...new Set(quotes.recipients.map((r) => r.quotes.find((q) => q.provider_id === o.provider_id)?.message).filter(Boolean))];
+                      return reasons.length ? (
+                        <p className="mt-3 flex items-start gap-1.5 text-xs font-medium text-rose-600">
+                          <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" /> {reasons.slice(0, 2).join(" · ")}
+                        </p>
+                      ) : null;
+                    })()}
                   </button>
                 );
               })}
@@ -175,6 +185,7 @@ export function QuotesStep({ batch, onBooked }: { batch: Batch; onBooked: (b: Ba
                           <span className={cx("block font-semibold", picked ? "text-brand-700" : "text-neutral-900")}>
                             {ok ? money(q!.total) : "Can't deliver"}
                           </span>
+                          {!ok && q?.message && <span className="block text-[11px] leading-tight text-neutral-400">{q.message}</span>}
                           {ok && q!.estimated_days ? <span className="text-[11px] text-neutral-400">{q!.estimated_days} days</span> : null}
                         </button>
                       );
@@ -218,7 +229,10 @@ export function QuotesStep({ batch, onBooked }: { batch: Batch; onBooked: (b: Ba
                               {q.estimated_days ? <span className="flex items-center justify-end gap-1 text-xs text-neutral-400"><Clock className="h-3 w-3" />{q.estimated_days}d</span> : null}
                             </span>
                           ) : (
-                            <span className="text-xs text-neutral-400">Can&apos;t deliver</span>
+                            <span className="ml-auto block max-w-[16rem] text-xs text-neutral-400">
+                              Can&apos;t deliver
+                              {q?.message && <span className="block text-[11px] text-neutral-400/90">{q.message}</span>}
+                            </span>
                           )}
                         </td>
                       );

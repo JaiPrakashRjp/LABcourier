@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from app.core.constants import BatchStatus, EventSource, ShipmentStatus
+from app.core.constants import BatchStatus, Direction, EventSource, ShipmentStatus
 from app.core.database import SessionLocal
 from app.couriers.base import Address, BookingItem, CourierAdapter, CourierError
 from app.couriers.india_post import make_barcode
@@ -237,7 +237,11 @@ def cancel_shipment(db: Session, user: User, shipment_id: int) -> Shipment:
     if s.status not in (ShipmentStatus.BOOKED, ShipmentStatus.PICKED_UP, ShipmentStatus.IN_TRANSIT):
         raise AppError("This package can no longer be cancelled")
     try:
-        courier_service.adapter_for_shipment(db, s).cancel(s.tracking_number)
+        adapter = courier_service.adapter_for_shipment(db, s)
+        if s.direction == Direction.RETURN:
+            adapter.cancel_return(s.tracking_number)
+        else:
+            adapter.cancel(s.tracking_number)
     except CourierError as exc:
         raise AppError(f"The courier refused the cancellation: {exc}") from exc
     now = datetime.now(UTC)

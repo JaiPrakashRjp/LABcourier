@@ -23,6 +23,9 @@ def encrypt(value: str) -> str:
 def decrypt(value: str | None) -> str | None:
     if not value:
         return None
+    # Plain tokens (for example a Shadowfax token typed straight into the database) are used as they are.
+    if not value.startswith("gAAAA"):
+        return value
     try:
         return _fernet().decrypt(value.encode()).decode()
     except InvalidToken as exc:

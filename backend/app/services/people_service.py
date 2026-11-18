@@ -43,19 +43,56 @@ def get(db: Session, user: User, model, record_id: int) -> PersonOut:
     return to_out(record)
 
 
-def create(db: Session, user: User, model, data: DentistIn | ExecutiveIn | LabIn) -> PersonOut:
-    pin = locations_dao.get_pincode(db, data.pincode)
+def _place(db: Session, pincode: str) -> dict:
+    pin = locations_dao.get_pincode(db, pincode)
     if not pin:
-        raise AppError(f"Pincode {data.pincode} was not found. Check the pincode.")
-    if model is not Lab and people_dao.find_by_phone(db, model, user.company_id, data.phone):
-        raise AppError(f"A {LABELS[model]} with phone {data.phone} already exists", 409)
-    values = data.model_dump()
-    values.update(company_id=user.company_id, city_id=pin.city_id, state_id=pin.state_id)
+        raise AppError(f"Pincode {pincode} was not found. Check the pincode.")
+    return {"city_id": pin.city_id, "state_id": pin.state_id}
+
+
+def create(db: Session, user: User, model, data: DentistIn | ExecutiveIn | LabIn) -> PersonOut:
+    values = {**data.model_dump(), **_place(db, data.pincode)}
     if model is not Lab:
+        existing = people_dao.find_by_phone(db, model, user.company_id, data.phone)
+        if existing and existing.is_active:
+            raise AppError(f"A {LABELS[model]} with phone {data.phone} already exists", 409)
+        if existing:
+            # Adding someone who was deleted brings their record back with the new details.
+            for key, value in values.items():
+                setattr(existing, key, value)
+            existing.is_active = True
+            db.commit()
+            db.refresh(existing)
+            return to_out(existing)
         values["created_by"] = user.id
-    record = people_dao.create(db, model, **values)
+    record = people_dao.create(db, model, company_id=user.company_id, **values)
     db.commit()
     return to_out(record)
+
+
+def update(db: Session, user: User, model, record_id: int, data: DentistIn | ExecutiveIn | LabIn) -> PersonOut:
+    record = people_dao.get(db, model, user.company_id, record_id)
+    if not record:
+        raise NotFound(f"{LABELS[model].title()} not found")
+    if model is not Lab and data.phone != record.phone:
+        other = people_dao.find_by_phone(db, model, user.company_id, data.phone)
+        if other:
+            raise AppError(f"A {LABELS[model]} with phone {data.phone} already exists", 409)
+    # Fields the form did not send (like alt_phone) keep their saved value.
+    for key, value in {**data.model_dump(exclude_unset=True), **_place(db, data.pincode)}.items():
+        setattr(record, key, value)
+    db.commit()
+    db.refresh(record)
+    return to_out(record)
+
+
+def delete(db: Session, user: User, model, record_id: int) -> None:
+    """Hides the record. Packages already sent keep their own copy of the address."""
+    record = people_dao.get(db, model, user.company_id, record_id)
+    if not record:
+        raise NotFound(f"{LABELS[model].title()} not found")
+    record.is_active = False
+    db.commit()
 
 
 def address_snapshot(record, company: str | None = None) -> dict:

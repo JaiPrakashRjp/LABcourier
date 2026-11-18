@@ -41,16 +41,20 @@ def search(
 
 
 def get(db: Session, model: PersonModel, company_id: int, record_id: int):
-    return db.scalar(select(model).where(model.id == record_id, model.company_id == company_id))
+    """Deleted records are hidden everywhere except old packages, which keep their own address copy."""
+    return db.scalar(select(model).where(
+        model.id == record_id, model.company_id == company_id, model.is_active.is_(True)))
 
 
 def get_many(db: Session, model: PersonModel, company_id: int, ids: list[int]) -> list:
     if not ids:
         return []
-    return list(db.scalars(select(model).where(model.company_id == company_id, model.id.in_(ids))))
+    return list(db.scalars(select(model).where(
+        model.company_id == company_id, model.id.in_(ids), model.is_active.is_(True))))
 
 
 def find_by_phone(db: Session, model: PersonModel, company_id: int, phone: str):
+    """Includes deleted records, because the phone stays unique per company."""
     return db.scalar(select(model).where(model.company_id == company_id, model.phone == phone))
 
 
