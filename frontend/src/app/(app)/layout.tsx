@@ -10,6 +10,8 @@ import {
   Menu as MenuIcon,
   Package,
   PackagePlus,
+  PanelLeftClose,
+  PanelLeftOpen,
   Stethoscope,
   Users,
   X,
@@ -48,29 +50,51 @@ function isActive(pathname: string, href: string) {
   return pathname.startsWith(href);
 }
 
+const SIDEBAR_KEY = "courier-hub:sidebar-collapsed";
+
 function Sidebar({
   isAdmin,
   current,
   onNavigate,
+  collapsed = false,
+  onToggle,
 }: {
   isAdmin: boolean;
   current: string;
   onNavigate: (href: string) => void;
+  /** Icons only (desktop). The phone drawer is always expanded. */
+  collapsed?: boolean;
+  onToggle?: () => void;
 }) {
   return (
     <div className="flex h-full flex-col bg-ink text-neutral-300">
-      <div className="px-5 py-6">
-        <Link href="/dashboard" onClick={() => onNavigate("/dashboard")}>
-          <Logo dark />
+      <div className={cx("flex py-6", collapsed ? "flex-col items-center gap-3 px-2" : "items-center justify-between gap-2 pl-5 pr-3")}>
+        <Link href="/dashboard" onClick={() => onNavigate("/dashboard")} title="Dashboard">
+          <Logo dark compact={collapsed} />
         </Link>
+        {onToggle && (
+          <button
+            onClick={onToggle}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-white/10 hover:text-white"
+            aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+            title={collapsed ? "Expand menu" : "Collapse menu"}
+            aria-expanded={!collapsed}
+          >
+            {collapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
+          </button>
+        )}
       </div>
-      <nav className="flex-1 space-y-7 overflow-y-auto px-3 pb-6">
-        {NAV.map((group) => {
+      <nav className={cx("flex-1 overflow-y-auto pb-6", collapsed ? "space-y-4 px-2" : "space-y-7 px-3")}>
+        {NAV.map((group, gi) => {
           const items = group.items.filter((i) => isAdmin || !i.admin);
           if (!items.length) return null;
           return (
             <div key={group.section}>
-              <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">{group.section}</p>
+              {collapsed ? (
+                gi > 0 && <div className="mx-3 mb-4 h-px bg-white/10" aria-hidden />
+              ) : (
+                <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">{group.section}</p>
+              )}
               <ul className="space-y-1">
                 {items.map((item) => {
                   const active = isActive(current, item.href);
@@ -81,8 +105,10 @@ function Sidebar({
                         prefetch
                         onClick={() => onNavigate(item.href)}
                         aria-current={active ? "page" : undefined}
+                        title={collapsed ? item.label : undefined}
                         className={cx(
-                          "group relative flex min-h-[44px] touch-manipulation items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors duration-100",
+                          "group relative flex min-h-[44px] touch-manipulation items-center gap-3 rounded-xl text-sm font-medium transition-colors duration-100",
+                          collapsed ? "justify-center px-0" : "px-3",
                           active ? "bg-white/10 text-white" : "text-neutral-400 hover:bg-white/5 hover:text-white active:bg-white/10",
                         )}
                       >
@@ -95,7 +121,7 @@ function Sidebar({
                           aria-hidden
                         />
                         <item.icon className={cx("h-[18px] w-[18px] transition-colors duration-100", active ? "text-brand-400" : "text-neutral-500 group-hover:text-neutral-300")} />
-                        {item.label}
+                        <span className={collapsed ? "sr-only" : undefined}>{item.label}</span>
                       </Link>
                     </li>
                   );
@@ -105,15 +131,22 @@ function Sidebar({
           );
         })}
       </nav>
-      {isAdmin && (
-        <div className="m-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-          <p className="text-sm font-semibold text-white">Ship to many at once</p>
-          <p className="mt-1 text-xs text-neutral-400">Compare couriers and book a whole batch in one click.</p>
-          <LinkButton href="/packages/new" size="sm" className="mt-3 w-full">
-            <PackagePlus className="h-4 w-4" /> New package
-          </LinkButton>
-        </div>
-      )}
+      {isAdmin &&
+        (collapsed ? (
+          <div className="flex justify-center px-2 pb-3">
+            <LinkButton href="/packages/new" size="sm" className="h-10 w-10 px-0" aria-label="New package">
+              <PackagePlus className="h-4 w-4" />
+            </LinkButton>
+          </div>
+        ) : (
+          <div className="m-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+            <p className="text-sm font-semibold text-white">Ship to many at once</p>
+            <p className="mt-1 text-xs text-neutral-400">Send to many dentists and book them all in one click.</p>
+            <LinkButton href="/packages/new" size="sm" className="mt-3 w-full">
+              <PackagePlus className="h-4 w-4" /> New package
+            </LinkButton>
+          </div>
+        ))}
     </div>
   );
 }
@@ -134,6 +167,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const search = useSearchParams().toString();
   const [drawer, setDrawer] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   // The page the user just clicked; it lights up before the page has loaded.
   const [pending, setPending] = useState<string | null>(null);
   const isAdmin = user?.role_id === ROLES.ADMIN;
@@ -150,6 +184,24 @@ function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (blocked) router.replace("/dashboard");
   }, [blocked, router]);
+
+  // Remember whether the desktop menu was collapsed (only for this browser).
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(SIDEBAR_KEY) === "1");
+    } catch {
+      /* storage blocked: start expanded */
+    }
+  }, []);
+  const toggleSidebar = () =>
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem(SIDEBAR_KEY, c ? "0" : "1");
+      } catch {
+        /* not saved; still works for this visit */
+      }
+      return !c;
+    });
 
   useEffect(() => {
     setDrawer(false);
@@ -173,11 +225,14 @@ function Shell({ children }: { children: React.ReactNode }) {
   const current = pending ?? pathname;
 
   return (
-    <div className="min-h-screen lg:pl-64">
+    <div
+      className="min-h-screen transition-[padding] duration-200 lg:pl-[var(--sidebar-w)]"
+      style={{ "--sidebar-w": collapsed ? "4.5rem" : "16rem" } as React.CSSProperties}
+    >
       <NavProgress active={!!pending} />
 
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-black lg:block">
-        <Sidebar isAdmin={isAdmin} current={current} onNavigate={navigate} />
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-w)] border-r border-black transition-[width] duration-200 lg:block">
+        <Sidebar isAdmin={isAdmin} current={current} onNavigate={navigate} collapsed={collapsed} onToggle={toggleSidebar} />
       </aside>
 
       <Dialog.Root open={drawer} onOpenChange={setDrawer}>

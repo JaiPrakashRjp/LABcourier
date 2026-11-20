@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeIndianRupee, Bell, MousePointerClick, RotateCcw } from "lucide-react";
+import { Bell, MousePointerClick, RotateCcw, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -13,7 +13,7 @@ export function safeNext(value: string | null): string {
 }
 
 const POINTS = [
-  { icon: BadgeIndianRupee, text: "Compare courier prices for every pincode" },
+  { icon: Users, text: "Send one package to many dentists at once" },
   { icon: MousePointerClick, text: "Book a whole batch in one click" },
   { icon: Bell, text: "Follow every status as it happens" },
   { icon: RotateCcw, text: "Report damage and track the return" },
@@ -42,7 +42,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
         </Link>
         <div className="relative">
           <h2 className="max-w-md font-display text-4xl font-bold leading-tight">
-            Every courier.
+            Every package.
             <br />
             <span className="bg-gradient-to-r from-white via-neutral-300 to-brand-400 bg-clip-text text-transparent">One place to ship.</span>
           </h2>
@@ -57,7 +57,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
             ))}
           </ul>
         </div>
-        <p className="relative text-sm text-neutral-400">India Post · Shadowfax · more couriers soon</p>
+        <p className="relative text-sm text-neutral-400">Built for dental labs across India</p>
       </aside>
 
       <section className="flex items-center justify-center px-5 py-12 sm:px-10">

@@ -66,6 +66,68 @@ def start_booking(db: Session, user: User, batch_id: int, data: BookIn) -> Shipm
     return batch
 
 
+def start_direct_booking(db: Session, user: User, batch_id: int) -> ShipmentBatch:
+    """Books straight away, with no price step (the labs are postpaid with one courier).
+
+    Each package goes to the first courier that has an API key and delivers to its pincode. No price is
+    needed or stored: the courier bills the lab's postpaid account.
+    """
+    batch = shipments_dao.get_batch(db, user.company_id, batch_id, lock=True)
+    if not batch:
+        raise NotFound("Package request not found")
+    if batch.status not in (BatchStatus.DRAFT, BatchStatus.QUOTED):
+        raise AppError("This package request is already booked")
+
+    # Couriers this company can book with, in order.
+    accounts = []
+    for provider in couriers_dao.active_providers(db):
+        key = couriers_dao.default_api_key(db, user.company_id, provider.id)
+        if key:
+            try:
+                accounts.append((provider, key, courier_service.adapter_for_key(key)))
+            except Exception as exc:  # noqa: BLE001 - a broken key must not block the others
+                log.warning("Courier %s is not usable: %s", provider.code, exc)
+    if not accounts:
+        raise AppError("No courier account is set up yet. Ask your admin to add the courier API key.")
+
+    parcel = courier_service.parcel_for(batch, batch.weight_g)
+    from_pin = batch.lab.pincode
+    checked: dict[tuple[int, str], object] = {}  # one serviceability check per courier and pincode
+    for s in batch.shipments:
+        to_pin = s.to_address["pincode"]
+        chosen, reason = None, None
+        for provider, key, adapter in accounts:
+            if (provider.id, to_pin) not in checked:
+                try:
+                    checked[(provider.id, to_pin)] = adapter.quote(from_pin, to_pin, parcel)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("Serviceability check failed for %s: %s", to_pin, exc)
+                    checked[(provider.id, to_pin)] = None
+            result = checked[(provider.id, to_pin)]
+            if result is not None and result.serviceable:
+                chosen = (provider, key, result)
+                break
+            reason = getattr(result, "message", None)
+        if not chosen:
+            s.status = ShipmentStatus.BOOKING_FAILED
+            s.booking_error = f"Delivery isn't available to pincode {to_pin} yet" if not reason or "available" in reason \
+                else reason
+            continue
+        provider, key, result = chosen
+        s.provider_id = provider.id
+        s.api_key_id = key.id
+        s.service_type = result.service_type
+        # Postpaid: the courier's monthly bill is the price, so none is stored here.
+        s.quoted_price = None
+        s.status = ShipmentStatus.BOOKING
+        s.booking_error = None
+
+    batch.status = BatchStatus.BOOKING
+    _update_counts(batch)
+    db.commit()
+    return batch
+
+
 def retry_failed(db: Session, user: User, batch_id: int) -> ShipmentBatch:
     batch = shipments_dao.get_batch(db, user.company_id, batch_id, lock=True)
     if not batch:
@@ -170,7 +232,7 @@ def _book_chunk(db: Session, adapter: CourierAdapter, batch: ShipmentBatch, ship
             s.booking_error = None
             shipments_dao.add_event(
                 db, shipment_id=s.id, status=ShipmentStatus.BOOKED, courier_event_code="SYSTEM_BOOKED",
-                description=f"Booked with {s.provider.name}", location=None, event_at=now,
+                description="Booked with the courier", location=None, event_at=now,
                 source=EventSource.SYSTEM, raw=r.raw,
             )
         else:
@@ -233,7 +295,7 @@ def cancel_shipment(db: Session, user: User, shipment_id: int) -> Shipment:
     if not s:
         raise NotFound("Package not found")
     if not (s.provider and s.provider.supports_cancel):
-        raise AppError(f"{s.provider.name if s.provider else 'This courier'} does not allow cancelling through its API")
+        raise AppError("This courier does not allow cancelling through its API")
     if s.status not in (ShipmentStatus.BOOKED, ShipmentStatus.PICKED_UP, ShipmentStatus.IN_TRANSIT):
         raise AppError("This package can no longer be cancelled")
     try:

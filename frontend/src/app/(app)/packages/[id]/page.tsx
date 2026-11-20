@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   Ban,
   Check,
   Copy,
@@ -23,7 +24,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Alert, Avatar, Button, Card, Field, FullPageSpinner, Modal, StatusBadge, Textarea, cx } from "@/components/ui";
 import { api, errorMessage, openFile } from "@/lib/api";
-import { STATUS_FILL, STATUS_LABELS, dateOnly, dateTime, money } from "@/lib/format";
+import { STATUS_FILL, STATUS_LABELS, dateOnly, dateTime } from "@/lib/format";
 import type { Address, ShipmentDetail } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 
@@ -102,7 +103,6 @@ export default function PackageDetailPage() {
                     {s.tracking_number} <Copy className="h-3 w-3" />
                   </button>
                 )}
-                {s.provider_name && <span className="text-sm text-neutral-500">via {s.provider_name}</span>}
               </div>
             </div>
           </div>
@@ -158,6 +158,8 @@ export default function PackageDetailPage() {
           )}
         </div>
       </Card>
+
+      <ReturnBanner s={s} />
 
       {s.booking_error && <Alert>Booking failed: {s.booking_error}</Alert>}
 
@@ -215,10 +217,8 @@ export default function PackageDetailPage() {
           <Card>
             <h2 className="mb-4 font-semibold text-neutral-900">Details</h2>
             <dl className="space-y-3 text-sm">
-              <Row label="Courier" value={s.provider_name ?? "—"} />
               <Row label="Service" value={s.service_type ?? "—"} />
               <Row label="Weight" value={`${s.weight_g} g`} />
-              <Row label="Price" value={money(s.final_price ?? s.quoted_price)} strong />
               <Row label="Booked" value={dateTime(s.booked_at)} />
               <Row label={s.delivered_at ? "Delivered" : "Expected"} value={s.delivered_at ? dateTime(s.delivered_at) : dateOnly(s.expected_delivery_date)} />
             </dl>
@@ -418,5 +418,61 @@ function ReturnModal({ open, shipmentId, onClose, onDone }: { open: boolean; shi
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** Makes a return easy to spot: on the original package it shows the request and its pickup, and on the
+ * return itself it links back to the original. */
+function ReturnBanner({ s }: { s: ShipmentDetail }) {
+  if (s.direction === "RETURN") {
+    const original = s.related[0];
+    if (!original) return null;
+    return (
+      <Card className="flex flex-wrap items-center justify-between gap-3 border-pink-200 bg-pink-50/60 p-4 sm:p-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-100 text-pink-600"><Undo2 className="h-5 w-5" /></span>
+          <div className="min-w-0">
+            <p className="font-semibold text-neutral-900">Return pickup back to the lab</p>
+            <p className="text-sm text-neutral-600">For package <span className="font-mono">{original.tracking_number ?? `#${original.id}`}</span></p>
+          </div>
+        </div>
+        <Link href={`/packages/${original.id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-pink-700 hover:text-pink-800">
+          View original package <ArrowRight className="h-4 w-4" />
+        </Link>
+      </Card>
+    );
+  }
+
+  const r = s.returns[0];
+  if (!r) return null;
+  const pickup = s.related[0];
+  const reason = REASONS.find((x) => x.value === r.reason)?.label ?? r.reason;
+  return (
+    <Card className="border-pink-200 bg-pink-50/60 p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-100 text-pink-600"><RotateCcw className="h-5 w-5" /></span>
+          <div className="min-w-0">
+            <p className="font-semibold text-neutral-900">Return requested · {reason}</p>
+            <p className="text-sm text-neutral-600">{dateTime(r.created_at)}{r.notes ? ` · “${r.notes}”` : ""}</p>
+            {r.status === "REQUESTED" && <p className="mt-1 text-sm font-medium text-pink-700">Booking the pickup with the courier…</p>}
+            {r.error && <p className="mt-1 text-sm text-rose-600">{r.error}</p>}
+          </div>
+        </div>
+        {pickup && (
+          <Link
+            href={`/packages/${pickup.id}`}
+            className="flex w-full items-center justify-between gap-3 rounded-xl border border-pink-200 bg-white px-4 py-3 transition hover:border-pink-300 sm:w-auto"
+          >
+            <span>
+              <span className="block text-xs text-neutral-500">Pickup booked</span>
+              <span className="block font-mono text-sm font-semibold text-neutral-900">{pickup.tracking_number ?? `#${pickup.id}`}</span>
+            </span>
+            <StatusBadge status={pickup.status} />
+            <span className="inline-flex items-center gap-1 text-sm font-semibold text-pink-700">Track <ArrowRight className="h-4 w-4" /></span>
+          </Link>
+        )}
+      </div>
+    </Card>
   );
 }

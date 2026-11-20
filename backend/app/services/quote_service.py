@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 
 def new_client_ref() -> str:
-    return "CH" + uuid.uuid4().hex[:14].upper()
+    return "LD" + uuid.uuid4().hex[:14].upper()
 
 
 def create_batch(db: Session, user: User, data: BatchCreateIn) -> ShipmentBatch:

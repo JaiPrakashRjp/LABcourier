@@ -1,8 +1,8 @@
 "use client";
 
-import { BadgeIndianRupee, Check, ClipboardCheck, PackageCheck, PenLine } from "lucide-react";
+import { ArrowRight, BadgeIndianRupee, Check, ClipboardCheck, PackageCheck, PenLine } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, FullPageSpinner, PageHeader, cx } from "@/components/ui";
+import { Alert, Button, Card, FullPageSpinner, PageHeader, cx } from "@/components/ui";
 import { DetailsStep, useDraft } from "@/components/new-package/DetailsStep";
 import { ProgressStep } from "@/components/new-package/ProgressStep";
 import { QuotesStep } from "@/components/new-package/QuotesStep";
@@ -10,12 +10,19 @@ import { api, errorMessage } from "@/lib/api";
 import type { Batch } from "@/lib/types";
 import { useUrlState } from "@/lib/useUrlState";
 
+/**
+ * Price comparison between couriers. Off while the labs are postpaid with a single courier: packages are
+ * booked straight from the review. Set to true to bring back the "Compare prices" step.
+ */
+const SHOW_PRICE_COMPARISON = false;
+
 const STEPS = [
   { label: "Details", icon: PenLine },
   { label: "Review", icon: ClipboardCheck },
-  { label: "Compare prices", icon: BadgeIndianRupee },
+  ...(SHOW_PRICE_COMPARISON ? [{ label: "Compare prices", icon: BadgeIndianRupee }] : []),
   { label: "Book & labels", icon: PackageCheck },
 ];
+const BOOK_STEP = STEPS.length - 1;
 
 /**
  * Where the user is lives in the URL:
@@ -52,7 +59,9 @@ export default function NewPackagePage() {
   const onBatchChange = useCallback((b: Batch) => setBatch(b), []);
 
   let step = values.step === "review" ? 1 : 0;
-  if (batchId) step = !batch ? 2 : batch.status === "DRAFT" || batch.status === "QUOTED" ? 2 : 3;
+  const unbooked = !!batch && (batch.status === "DRAFT" || batch.status === "QUOTED");
+  // A saved but unbooked request waits on the compare step, or on the review when there is none.
+  if (batchId) step = !batch || unbooked ? (SHOW_PRICE_COMPARISON ? 2 : 1) : BOOK_STEP;
 
   return (
     <div>
@@ -101,6 +110,7 @@ export default function NewPackagePage() {
             draft={draft}
             setDraft={setDraft}
             reviewing={step === 1}
+            bookDirect={!SHOW_PRICE_COMPARISON}
             onReview={() => update({ step: "review" }, { push: true })}
             onEdit={() => update({ step: null })}
             onCreated={(b) => {
@@ -114,8 +124,37 @@ export default function NewPackagePage() {
         ))}
 
       {batchId && !batch && !error && <FullPageSpinner />}
-      {batch && step === 2 && <QuotesStep batch={batch} onBooked={onBatchChange} />}
-      {batch && step === 3 && <ProgressStep batch={batch} onChange={onBatchChange} />}
+      {batch && unbooked && SHOW_PRICE_COMPARISON && <QuotesStep batch={batch} onBooked={onBatchChange} />}
+      {batch && unbooked && !SHOW_PRICE_COMPARISON && <BookNow batch={batch} onBooked={onBatchChange} />}
+      {batch && !unbooked && <ProgressStep batch={batch} onChange={onBatchChange} />}
     </div>
+  );
+}
+
+/** A saved request that wasn't booked yet (for example a draft opened again): book it in one click. */
+function BookNow({ batch, onBooked }: { batch: Batch; onBooked: (b: Batch) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function book() {
+    setBusy(true);
+    setError("");
+    try {
+      onBooked(await api<Batch>(`/batches/${batch.id}/book-now`, { method: "POST" }));
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  }
+  return (
+    <Card className="mx-auto max-w-xl p-6 text-center">
+      <p className="font-display text-lg font-bold text-neutral-900">Ready to book</p>
+      <p className="mt-1 text-sm text-neutral-500">
+        {batch.lab_name} → {batch.total_count} recipient{batch.total_count === 1 ? "" : "s"} · {batch.contents} · {batch.weight_g} g
+      </p>
+      {error && <div className="mt-4 text-left"><Alert>{error}</Alert></div>}
+      <Button size="lg" className="mt-6" onClick={book} loading={busy}>
+        Book {batch.total_count} package{batch.total_count === 1 ? "" : "s"} <ArrowRight className="h-4 w-4" />
+      </Button>
+    </Card>
   );
 }

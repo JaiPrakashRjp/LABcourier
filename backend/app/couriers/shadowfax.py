@@ -132,7 +132,7 @@ def _cancel_error(body: dict) -> str | None:
     if "responseCode" in body:
         if str(body.get("responseCode")) == "200":
             return None
-        return str(body.get("responseMsg") or "Shadowfax refused the cancellation")
+        return str(body.get("responseMsg") or "The courier refused the cancellation")
     return ShadowfaxAdapter._failed(body)
 
 
@@ -150,24 +150,24 @@ class ShadowfaxAdapter(CourierAdapter):
 
     def _request(self, method: str, path: str, **kwargs) -> dict | list:
         if not self.credentials.api_key:
-            raise CourierError("Shadowfax isn't set up yet: no API key is saved. Ask your admin to add it.")
+            raise CourierError("The courier isn't set up yet: no API key is saved. Ask your admin to add it.")
         headers = {"Authorization": f"Token {self.credentials.api_key}"}
         try:
             resp = httpx.request(method, f"{self.base_url}{path}", headers=headers, timeout=60, **kwargs)
         except httpx.HTTPError as exc:
             log.warning("Shadowfax call %s failed: %s", path, exc)
-            raise CourierError("Couldn't reach Shadowfax right now. Please try again in a few minutes.") from exc
+            raise CourierError("Couldn't reach the courier right now. Please try again in a few minutes.") from exc
         if resp.status_code in (401, 403):
-            raise CourierError("Shadowfax did not accept the saved API key. Ask your admin to check it.")
+            raise CourierError("The courier did not accept the saved API key. Ask your admin to check it.")
         try:
             body = resp.json()
         except ValueError as exc:
             log.warning("Shadowfax %s unreadable: %s %s", path, resp.status_code, resp.text[:300])
-            raise CourierError("Shadowfax isn't responding properly right now. Please try again in a few minutes.") from exc
+            raise CourierError("The courier isn't responding properly right now. Please try again in a few minutes.") from exc
         if resp.status_code >= 400 and isinstance(body, dict):
             # "message" is often just "Failure"; the reason is in "errors".
             raise CourierError(str(body.get("errors") or body.get("responseMsg") or body.get("message")
-                                   or f"Shadowfax returned error {resp.status_code}"))
+                                   or f"The courier returned error {resp.status_code}"))
         return body
 
     @staticmethod
@@ -176,7 +176,7 @@ class ShadowfaxAdapter(CourierAdapter):
         if str(body.get("message", "")).lower() == "success":
             return None
         errors = body.get("errors")
-        return str(errors or body.get("message") or "Shadowfax rejected the request")
+        return str(errors or body.get("message") or "The courier rejected the request")
 
     @staticmethod
     def _party(a, line_key: str) -> dict:
@@ -202,7 +202,7 @@ class ShadowfaxAdapter(CourierAdapter):
         tiers = {str(r.get("code")): {s.lower() for s in r.get("services") or []} for r in rows}
         missing = [p for p in (sender_pincode, receiver_pincode) if tier.lower() not in tiers.get(p, set())]
         if missing:
-            return QuoteResult(serviceable=False, message=f"Shadowfax does not serve pincode {', '.join(missing)}",
+            return QuoteResult(serviceable=False, message=f"Delivery isn't available to pincode {', '.join(missing)} yet",
                                raw={"rows": rows})
         return QuoteResult(serviceable=True, service_type=tier, raw={"rows": rows})
 
@@ -243,7 +243,7 @@ class ShadowfaxAdapter(CourierAdapter):
         data = body.get("data") or {}
         if error or not data.get("awb_number"):
             return BookingResult(client_ref=item.client_ref, success=False,
-                                 error=error or "Shadowfax sent no tracking number", raw=body)
+                                 error=error or "The courier sent no tracking number", raw=body)
         return BookingResult(
             client_ref=item.client_ref, success=True,
             tracking_number=data.get("awb_number"), courier_order_id=str(data.get("id") or ""),
@@ -330,13 +330,13 @@ class ShadowfaxAdapter(CourierAdapter):
             body = self._request("POST", "/client/generate_label/", json={"awb_number": awb, "file_type": "pdf"})
             url = (body.get("data") or {}).get("label_url")
             if not url:
-                raise CourierError(f"Shadowfax couldn't create the label for {awb}: {body.get('message') or 'unknown reason'}")
+                raise CourierError(f"The courier couldn't create the label for {awb}: {body.get('message') or 'unknown reason'}")
             try:
                 pdf = httpx.get(url, timeout=60)
             except httpx.HTTPError as exc:
-                raise CourierError(f"Couldn't download the Shadowfax label for {awb}. Please try again.") from exc
+                raise CourierError(f"Couldn't download the label for {awb}. Please try again.") from exc
             if pdf.status_code != 200:
-                raise CourierError(f"Couldn't download the Shadowfax label for {awb}. Please try again.")
+                raise CourierError(f"Couldn't download the label for {awb}. Please try again.")
             pdfs.append(pdf.content)
         return pdfs
 

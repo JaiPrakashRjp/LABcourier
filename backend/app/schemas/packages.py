@@ -15,15 +15,16 @@ class BatchCreateIn(BaseModel):
     height_cm: float | None = Field(default=None, gt=0, le=150)
     contents: str = Field(min_length=2, max_length=200)
     declared_value: float = Field(default=0, ge=0)
-    payment_mode: str = Field(default="PREPAID", pattern="^(PREPAID|COD)$")
-    cod_amount: float = Field(default=0, ge=0)
+    # The labs are postpaid: the courier bills the lab's account and nothing is collected from the
+    # recipient. Couriers call that "prepaid", so every package is sent that way, whatever is sent here.
+    payment_mode: str = "PREPAID"
+    cod_amount: float = 0
 
     @model_validator(mode="after")
     def check(self):
         if not self.dentist_ids and not self.executive_ids:
             raise ValueError("Select at least one dentist or executive")
-        if self.payment_mode == "COD" and self.cod_amount <= 0:
-            raise ValueError("Enter the COD amount")
+        self.payment_mode, self.cod_amount = "PREPAID", 0
         return self
 
 

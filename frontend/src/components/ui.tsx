@@ -25,7 +25,7 @@ export function Logo({ dark, compact }: { dark?: boolean; compact?: boolean }) {
       </span>
       {!compact && (
         <span className={cx("font-display text-lg font-bold tracking-tight", dark ? "text-white" : "text-neutral-900")}>
-          Courier<span className={dark ? "text-brand-300" : "text-brand-600"}>Hub</span>
+          Lab<span className={dark ? "text-brand-300" : "text-brand-600"}>Drop</span>
         </span>
       )}
     </span>

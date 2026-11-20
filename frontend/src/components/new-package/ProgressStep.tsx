@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Alert, Avatar, Button, Card, LinkButton, StatusBadge, cx, table } from "@/components/ui";
 import { api, errorMessage, openFile } from "@/lib/api";
-import { money } from "@/lib/format";
 import type { Batch } from "@/lib/types";
 
 /** Booking runs in the background; this polls until every package is booked or failed. */
@@ -47,7 +46,6 @@ export function ProgressStep({ batch, onChange }: { batch: Batch; onChange: (b: 
   const done = batch.booked_count + batch.failed_count;
   const percent = batch.total_count ? Math.round((done / batch.total_count) * 100) : 0;
   const booked = batch.shipments.filter((s) => s.tracking_number && s.status !== "BOOKING_FAILED");
-  const total = batch.shipments.reduce((sum, s) => sum + (s.final_price ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -66,7 +64,7 @@ export function ProgressStep({ batch, onChange }: { batch: Batch; onChange: (b: 
               {running ? "Booking your packages…" : batch.failed_count ? "Booked, with some failures" : "All packages booked"}
             </h2>
             <p className="mt-0.5 text-sm text-neutral-500">
-              From {batch.lab_name} · {batch.total_count} recipients{!running && total ? ` · ${money(total)} total` : ""}
+              From {batch.lab_name} · {batch.total_count} recipients
             </p>
           </div>
           <div className="grid w-full grid-cols-3 divide-x divide-neutral-100 rounded-xl bg-neutral-50 py-3 text-center sm:flex sm:w-auto sm:gap-6 sm:divide-x-0 sm:bg-transparent sm:py-0">
@@ -126,10 +124,8 @@ export function ProgressStep({ batch, onChange }: { batch: Batch; onChange: (b: 
               </div>
               <div className="mt-3 flex items-center justify-between gap-3 border-t border-neutral-100 pt-3 text-xs text-neutral-500">
                 <span className="min-w-0 truncate">
-                  {s.provider_name ?? "—"}
-                  {s.tracking_number && <span className="font-mono"> · {s.tracking_number}</span>}
+                  {s.tracking_number ? <span className="font-mono">{s.tracking_number}</span> : "—"}
                 </span>
-                <span className="shrink-0 font-semibold text-neutral-900">{money(s.final_price ?? s.quoted_price)}</span>
               </div>
               {s.booking_error && <p className="mt-2 text-xs text-rose-600">{s.booking_error}</p>}
             </Link>
@@ -142,10 +138,8 @@ export function ProgressStep({ batch, onChange }: { batch: Batch; onChange: (b: 
           <thead className={table.head}>
             <tr>
               <th className={table.th}>Recipient</th>
-              <th className={table.th}>Courier</th>
               <th className={table.th}>Tracking no.</th>
               <th className={table.th}>Status</th>
-              <th className={cx(table.th, "text-right")}>Price</th>
             </tr>
           </thead>
           <tbody>
@@ -160,13 +154,11 @@ export function ProgressStep({ batch, onChange }: { batch: Batch; onChange: (b: 
                     </span>
                   </Link>
                 </td>
-                <td className={cx(table.td, "text-neutral-700")}>{s.provider_name ?? "—"}</td>
                 <td className={cx(table.td, "font-mono text-xs")}>{s.tracking_number ?? "—"}</td>
                 <td className={table.td}>
                   <StatusBadge status={s.status} />
                   {s.booking_error && <span className="mt-1.5 block max-w-xs text-xs text-rose-600">{s.booking_error}</span>}
                 </td>
-                <td className={cx(table.td, "text-right font-semibold text-neutral-900")}>{money(s.final_price ?? s.quoted_price)}</td>
               </tr>
             ))}
           </tbody>

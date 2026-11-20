@@ -263,7 +263,7 @@ export function QuotesStep({ batch, onBooked }: { batch: Batch; onBooked: (b: Ba
           {unreachable > 0 && <Alert tone="info">{unreachable} recipient{unreachable === 1 ? "" : "s"} can&apos;t be reached by any courier and will be marked as failed.</Alert>}
 
           {/* Sticky booking bar */}
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-neutral-200 bg-white/85 shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.15)] backdrop-blur-xl lg:left-64">
+          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-neutral-200 bg-white/85 shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.15)] backdrop-blur-xl lg:left-[var(--sidebar-w,16rem)]">
             <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-8 sm:py-4">
               <div>
                 <p className="text-xs text-neutral-500">{bookable} package{bookable === 1 ? "" : "s"}{moved ? ` · ${moved} switched courier` : ""}</p>

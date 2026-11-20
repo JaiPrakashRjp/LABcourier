@@ -3,7 +3,6 @@
 import anime from "animejs";
 import {
   ArrowRight,
-  BadgeIndianRupee,
   Bell,
   Building2,
   CheckCircle2,
@@ -25,8 +24,8 @@ import { LinkButton, Logo, cx } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 
 const FEATURES = [
-  { icon: BadgeIndianRupee, title: "Compare prices by pincode", text: "India Post and Shadowfax side by side for every recipient, with the best value marked.", wide: true },
-  { icon: MousePointerClick, title: "Book a batch in one click", text: "Anyone one courier can't reach goes to the next best automatically." },
+  { icon: Users, title: "One package, many clinics", text: "Pick a lab, tick every dentist and executive who needs it, and send them all together.", wide: true },
+  { icon: MousePointerClick, title: "Book a batch in one click", text: "Every package is booked at once, with its own tracking number." },
   { icon: Bell, title: "Every status, live", text: "Courier updates arrive as they happen, with a regular check as backup." },
   { icon: RotateCcw, title: "Damage returns built in", text: "Report damage with photos. The same courier collects it and the return is tracked with the original.", wide: true },
   { icon: FileStack, title: "All labels in one PDF", text: "Every label for a batch, ready to print." },
@@ -36,12 +35,12 @@ const FEATURES = [
 const STEPS = [
   { icon: Building2, title: "Pick the lab", text: "Search a saved lab or add a new one." },
   { icon: Users, title: "Tick the recipients", text: "Filter by state and city, then select dentists and executives." },
-  { icon: BadgeIndianRupee, title: "Compare couriers", text: "Every courier prices every recipient." },
-  { icon: PackageCheck, title: "Book and track", text: "One click books them all. Follow each one to the door." },
+  { icon: PackageCheck, title: "Book in one click", text: "Every package is booked together, each with its own tracking number." },
+  { icon: Bell, title: "Track to the door", text: "Follow each package live, from pickup to delivery." },
 ];
 
 const ROLES = [
-  { icon: UserCog, name: "Admin", text: "Manages labs, dentists and executives, compares prices, books and cancels, and sees every package." },
+  { icon: UserCog, name: "Admin", text: "Manages labs, dentists and executives, books and cancels packages, and sees every package." },
   { icon: Stethoscope, name: "Doctor", text: "Signs up with their registered number, tracks packages sent to them and reports damage." },
   { icon: Users, name: "Executive", text: "Their own packages, live status and returns, just like doctors." },
 ];
@@ -132,7 +131,7 @@ export default function Landing() {
         <div className="absolute left-1/2 top-[-18rem] h-[36rem] w-[60rem] -translate-x-1/2 rounded-full bg-brand-500/20 blur-[140px]" aria-hidden />
 
         <header className="relative z-20 mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
-          <Link href="/" aria-label="Courier Hub home">
+          <Link href="/" aria-label="LabDrop home">
             <Logo dark />
           </Link>
           <nav className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] p-1 text-sm backdrop-blur md:flex">
@@ -191,12 +190,12 @@ export default function Landing() {
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" /> Built for dental labs across India
             </span>
             <h1 className="hero-in mt-6 font-display text-[2.6rem] font-extrabold leading-[1.05] tracking-tight opacity-0 sm:text-6xl lg:text-[4.25rem]">
-              Every courier.
+              Every package.
               <br />
               <span className="bg-gradient-to-r from-white via-neutral-300 to-brand-400 bg-clip-text text-transparent">One place to ship.</span>
             </h1>
             <p className="hero-in mt-6 max-w-xl text-lg leading-relaxed text-neutral-400 opacity-0">
-              Compare courier prices by pincode, book packages to many dentists and executives in a single click, and follow every status to the clinic door.
+              Book packages to many dentists and executives in a single click, print every label at once, and follow every status to the clinic door.
             </p>
             <div className="hero-in mt-9 flex flex-col gap-3 opacity-0 sm:flex-row">
               <LinkButton href={primaryHref} size="lg">
@@ -208,7 +207,7 @@ export default function Landing() {
             </div>
             <dl className="hero-in mt-12 grid max-w-lg grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-8 opacity-0">
               {[
-                ["2", "couriers connected"],
+                ["24/7", "live tracking"],
                 ["19,300", "pincodes ready"],
                 ["1 click", "books a batch"],
               ].map(([value, label], i) => (
@@ -227,7 +226,7 @@ export default function Landing() {
               <div className="rounded-[20px] bg-white p-5 text-neutral-900 shadow-lift sm:p-6">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Compare couriers</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Live tracking</p>
                     <p className="mt-1 font-display text-lg font-bold">Smile Lab → 3 clinics</p>
                   </div>
                   <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">600 g parcel</span>
@@ -247,54 +246,39 @@ export default function Landing() {
 
                 <div className="space-y-2.5">
                   {[
-                    { name: "India Post", note: "Reaches 2 of 3 · Speed Post", value: 142, best: false },
-                    { name: "Shadowfax", note: "Reaches 3 of 3 · Regular", value: 157, best: true },
+                    { name: "Dr. Rao Dental Clinic", place: "Bengaluru · 560034", status: "Delivered", tone: "bg-emerald-50 text-emerald-700 ring-emerald-200", done: true },
+                    { name: "Smile Care", place: "Mysuru · 570001", status: "Out for delivery", tone: "bg-amber-50 text-amber-700 ring-amber-200", done: false },
+                    { name: "City Dental", place: "Chennai · 600017", status: "In transit", tone: "bg-sky-50 text-sky-700 ring-sky-200", done: false },
                   ].map((c) => (
                     <div
                       key={c.name}
                       className={cx(
-                        "quote-row flex items-center justify-between rounded-2xl border p-3.5 opacity-0",
-                        c.best ? "border-brand-500 bg-brand-50/50 shadow-glow" : "border-neutral-200",
+                        "quote-row flex items-center justify-between gap-3 rounded-2xl border p-3.5 opacity-0",
+                        c.done ? "border-brand-500 bg-brand-50/50 shadow-glow" : "border-neutral-200",
                       )}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className={cx("flex h-9 w-9 items-center justify-center rounded-xl", c.best ? "bg-brand-600 text-white" : "bg-neutral-100 text-neutral-600")}>
-                          <Truck className="h-4 w-4" />
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className={cx("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", c.done ? "bg-brand-600 text-white" : "bg-neutral-100 text-neutral-600")}>
+                          {c.done ? <CheckCircle2 className="h-4 w-4" /> : <Truck className="h-4 w-4" />}
                         </span>
-                        <div>
-                          <p className="text-sm font-semibold">{c.name}</p>
-                          <p className="text-xs text-neutral-500">{c.note}</p>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">{c.name}</p>
+                          <p className="text-xs text-neutral-500">{c.place}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="count font-display text-lg font-bold" data-value={c.value}>₹0</p>
-                        {c.best && <span className="best-pill inline-block rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white opacity-0">Reaches all</span>}
-                      </div>
+                      <span className={cx("best-pill inline-block shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 opacity-0", c.tone)}>{c.status}</span>
                     </div>
                   ))}
                 </div>
                 <div className="mt-4 flex items-center justify-between rounded-2xl bg-neutral-950 px-4 py-3.5 text-white">
-                  <span className="text-sm text-neutral-400">3 packages ready</span>
+                  <span className="text-sm text-neutral-400">3 packages booked</span>
                   <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
-                    Book all <ArrowRight className="h-4 w-4 text-brand-400" />
+                    Track all <ArrowRight className="h-4 w-4 text-brand-400" />
                   </span>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* ---------- Couriers strip ---------- */}
-      <section className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-10 gap-y-3 px-5 py-7 text-sm sm:px-8">
-          <span className="text-xs font-semibold uppercase tracking-widest text-neutral-400">Connected couriers</span>
-          {["India Post", "Shadowfax"].map((c) => (
-            <span key={c} className="flex items-center gap-2 font-semibold text-neutral-800">
-              <Truck className="h-5 w-5 text-neutral-900" /> {c}
-            </span>
-          ))}
-          <span className="text-neutral-400">+ more anytime</span>
         </div>
       </section>
 
@@ -305,7 +289,7 @@ export default function Landing() {
           <div className="reveal mx-auto max-w-2xl text-center opacity-0">
             <p className="text-sm font-semibold uppercase tracking-widest text-brand-600">Features</p>
             <h2 className="mt-3 text-3xl font-bold text-neutral-950 sm:text-[2.6rem] sm:leading-tight">Everything from booking to the doorstep</h2>
-            <p className="mt-4 text-lg text-neutral-500">No more switching between courier websites. One account, every courier, every package.</p>
+            <p className="mt-4 text-lg text-neutral-500">No more phone calls and spreadsheets. One account for every package, from booking to delivery.</p>
           </div>
           <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {FEATURES.map((f) => (
@@ -409,7 +393,7 @@ export default function Landing() {
       <footer className="border-t border-neutral-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-5 py-8 text-sm text-neutral-500 sm:flex-row sm:px-8">
           <Logo />
-          <span>Compare, book and track dental lab shipments.</span>
+          <span>Book and track dental lab shipments.</span>
           <Link href="/login" className="font-semibold text-neutral-900 hover:text-brand-600">
             Sign in →
           </Link>

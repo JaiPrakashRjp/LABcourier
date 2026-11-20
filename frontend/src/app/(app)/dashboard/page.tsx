@@ -19,7 +19,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Alert, Button, Card, Input, LinkButton, PageHeader, Select, Skeleton, cx } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
-import { STATUS_FILL, STATUS_LABELS, STATUS_ORDER, dateOnly, money } from "@/lib/format";
+import { STATUS_FILL, STATUS_LABELS, STATUS_ORDER, dateOnly } from "@/lib/format";
 import { ROLES, type Dashboard } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 import { useUrlState } from "@/lib/useUrlState";
@@ -250,10 +250,11 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {data.by_provider.length > 0 && (
+          {/* Per-courier breakdown: shown again once there is more than one courier. */}
+          {data.by_provider.length > 1 && (
             <Card>
               <h2 className="font-semibold text-neutral-900">By courier</h2>
-              <p className="mt-0.5 text-sm text-neutral-500">Packages and spend in this period</p>
+              <p className="mt-0.5 text-sm text-neutral-500">Packages in this period</p>
               <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {data.by_provider.map((p) => {
                   const share = data.total ? Math.round((p.count / data.total) * 100) : 0;
@@ -269,10 +270,6 @@ export default function DashboardPage() {
                       <div className="mt-4 flex justify-between text-sm">
                         <span className="text-neutral-500">Packages</span>
                         <span className="font-semibold text-neutral-900">{p.count}</span>
-                      </div>
-                      <div className="mt-1.5 flex justify-between text-sm">
-                        <span className="text-neutral-500">Spend</span>
-                        <span className="font-semibold text-neutral-900">{money(p.spend)}</span>
                       </div>
                     </div>
                   );

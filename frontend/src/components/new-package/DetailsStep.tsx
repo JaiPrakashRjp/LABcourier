@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, BadgeIndianRupee, Box, Building2, Banknote, CreditCard, Stethoscope, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Box, Building2, Stethoscope, Users, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Alert, Avatar, Button, Card, Field, Input, SectionTitle, cx } from "@/components/ui";
+import { Alert, Avatar, Button, Card, Field, Input, SectionTitle } from "@/components/ui";
+import { toast } from "sonner";
 import { api, errorMessage } from "@/lib/api";
 import type { Batch } from "@/lib/types";
 import { LabPicker, type PickedLab } from "./LabPicker";
@@ -17,8 +18,6 @@ export interface Draft {
   height_cm: string;
   contents: string;
   declared_value: string;
-  payment_mode: "PREPAID" | "COD";
-  cod_amount: string;
 }
 
 const DRAFT_KEY = "courier-hub:new-package";
@@ -32,8 +31,6 @@ export const EMPTY_DRAFT: Draft = {
   height_cm: "",
   contents: "Dental lab work",
   declared_value: "",
-  payment_mode: "PREPAID",
-  cod_amount: "",
 };
 
 /** The unsent form is kept for this browser tab, so a refresh doesn't lose it. */
@@ -88,7 +85,6 @@ function validate(d: Draft): string {
     const v = Number(d[key]);
     if (!(v > 0) || v > 150) return `${label} must be between 1 and 150 cm`;
   }
-  if (d.payment_mode === "COD" && !(Number(d.cod_amount) > 0)) return "Enter the COD amount";
   return "";
 }
 
@@ -148,13 +144,6 @@ function Summary({ draft, onRemove }: { draft: Draft; onRemove?: (kind: keyof Se
             <p className="text-xs text-neutral-500">{dims}</p>
           </div>
         </div>
-        <div className="flex items-start gap-3">
-          <BadgeIndianRupee className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" />
-          <div>
-            <p className="text-xs text-neutral-500">Payment</p>
-            <p className="font-semibold text-neutral-900">{draft.payment_mode === "COD" ? `Cash on delivery${draft.cod_amount ? ` · ₹${draft.cod_amount}` : ""}` : "Prepaid"}</p>
-          </div>
-        </div>
       </div>
     </Card>
   );
@@ -167,6 +156,7 @@ export function DetailsStep({
   onReview,
   onEdit,
   onCreated,
+  bookDirect = false,
 }: {
   draft: Draft;
   setDraft: (d: Draft) => void;
@@ -174,6 +164,8 @@ export function DetailsStep({
   onReview: () => void;
   onEdit: () => void;
   onCreated: (batch: Batch) => void;
+  /** Book straight after saving, with no price step. */
+  bookDirect?: boolean;
 }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -210,11 +202,16 @@ export function DetailsStep({
           height_cm: num(draft.height_cm),
           contents: draft.contents.trim(),
           declared_value: Number(draft.declared_value || 0),
-          payment_mode: draft.payment_mode,
-          cod_amount: draft.payment_mode === "COD" ? Number(draft.cod_amount) : 0,
         },
       });
-      onCreated(batch);
+      if (!bookDirect) return onCreated(batch);
+      try {
+        onCreated(await api<Batch>(`/batches/${batch.id}/book-now`, { method: "POST" }));
+      } catch (err) {
+        // Saved but not booked: the next screen offers "Book" again.
+        toast.error(errorMessage(err));
+        onCreated(batch);
+      }
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -239,7 +236,6 @@ export function DetailsStep({
               <div><dt className="text-neutral-500">Contents</dt><dd className="font-medium text-neutral-900">{draft.contents}</dd></div>
               <div><dt className="text-neutral-500">Weight</dt><dd className="font-medium text-neutral-900">{draft.weight_g} g</dd></div>
               <div><dt className="text-neutral-500">Size</dt><dd className="font-medium text-neutral-900">{draft.length_cm ? `${draft.length_cm} × ${draft.breadth_cm || "—"} × ${draft.height_cm || "—"} cm` : "Not given"}</dd></div>
-              <div><dt className="text-neutral-500">Payment</dt><dd className="font-medium text-neutral-900">{draft.payment_mode === "COD" ? `COD ₹${draft.cod_amount}` : "Prepaid"}</dd></div>
               {draft.declared_value && <div><dt className="text-neutral-500">Declared value</dt><dd className="font-medium text-neutral-900">₹{draft.declared_value}</dd></div>}
             </dl>
           </Card>
@@ -261,7 +257,7 @@ export function DetailsStep({
         {error && <Alert>{error}</Alert>}
         <div className="flex flex-wrap justify-between gap-3">
           <Button variant="secondary" size="lg" onClick={onEdit}><ArrowLeft className="h-4 w-4" /> Edit details</Button>
-          <Button size="lg" onClick={save} loading={busy}>Save and compare prices <ArrowRight className="h-4 w-4" /></Button>
+          <Button size="lg" onClick={save} loading={busy}>{bookDirect ? "Book now" : "Save and compare prices"} <ArrowRight className="h-4 w-4" /></Button>
         </div>
       </div>
     );
@@ -296,34 +292,7 @@ export function DetailsStep({
             <Field label="Height (cm)"><Input inputMode="decimal" value={draft.height_cm} onChange={set("height_cm")} /></Field>
           </div>
 
-          <p className="mb-2 mt-6 text-sm font-medium text-neutral-700">Payment</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              { value: "PREPAID", label: "Prepaid", note: "Charges billed to your account", icon: CreditCard },
-              { value: "COD", label: "Cash on delivery", note: "Courier collects from the recipient", icon: Banknote },
-            ].map((m) => (
-              <button
-                key={m.value}
-                type="button"
-                onClick={() => setDraft({ ...draft, payment_mode: m.value as Draft["payment_mode"] })}
-                aria-pressed={draft.payment_mode === m.value}
-                className={cx(
-                  "flex items-center gap-3 rounded-xl border-2 p-4 text-left transition",
-                  draft.payment_mode === m.value ? "border-brand-600 bg-brand-50/50" : "border-neutral-200 hover:border-neutral-300",
-                )}
-              >
-                <m.icon className={cx("h-5 w-5", draft.payment_mode === m.value ? "text-brand-600" : "text-neutral-400")} />
-                <span>
-                  <span className="block text-sm font-semibold text-neutral-900">{m.label}</span>
-                  <span className="block text-xs text-neutral-500">{m.note}</span>
-                </span>
-              </button>
-            ))}
-          </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            {draft.payment_mode === "COD" && (
-              <Field label="COD amount (₹)"><Input inputMode="decimal" value={draft.cod_amount} onChange={set("cod_amount")} required /></Field>
-            )}
             <Field label="Declared value (₹, optional)" hint="Used for courier insurance">
               <Input inputMode="decimal" value={draft.declared_value} onChange={set("declared_value")} />
             </Field>

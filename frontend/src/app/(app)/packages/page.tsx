@@ -21,12 +21,12 @@ import {
 } from "@/components/ui";
 import { DraftsPanel } from "@/components/DraftsPanel";
 import { useAuth } from "@/lib/auth";
-import { STATUS_FILL, STATUS_LABELS, STATUS_ORDER, dateOnly, money } from "@/lib/format";
+import { STATUS_FILL, STATUS_LABELS, STATUS_ORDER, dateOnly } from "@/lib/format";
 import { ROLES, type City, type Courier, type Page, type Person, type Shipment, type State } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 import { useUrlState } from "@/lib/useUrlState";
 
-const LIMIT = 25;
+const LIMIT = 10;
 const FILTER_KEYS = ["status", "courier", "direction", "type", "state", "city", "pincode", "q", "from", "to", "lab", "batch"];
 
 export default function PackagesPage() {
@@ -75,7 +75,7 @@ export default function PackagesPage() {
     <div>
       <PageHeader
         title="Packages"
-        subtitle={isAdmin ? "Every package and return across all couriers." : "Packages sent to you, and their returns."}
+        subtitle={isAdmin ? "Every package and return in one place." : "Packages sent to you, and their returns."}
         actions={isAdmin && <LinkButton href="/packages/new"><PackagePlus className="h-4 w-4" /> New package</LinkButton>}
       />
 
@@ -100,7 +100,6 @@ export default function PackagesPage() {
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
             <option value="status">By status</option>
-            <option value="price">Highest price</option>
           </Select>
           <Button variant={showFilters || panelCount ? "primary" : "secondary"} onClick={() => setShowFilters((s) => !s)} aria-expanded={showFilters}>
             <SlidersHorizontal className="h-4 w-4" /> Filters
@@ -136,10 +135,13 @@ export default function PackagesPage() {
 
         {(showFilters || panelCount > 0) && (
           <div className="grid grid-cols-2 gap-2 border-t border-neutral-100 pt-4 sm:gap-3 lg:grid-cols-4">
-            <Select value={values.courier ?? ""} onChange={(e) => set({ courier: e.target.value || null })} aria-label="Courier">
-              <option value="">All couriers</option>
-              {couriers.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </Select>
+            {/* Courier filter: shown again once there is more than one courier. */}
+            {(couriers.data?.length ?? 0) > 1 && (
+              <Select value={values.courier ?? ""} onChange={(e) => set({ courier: e.target.value || null })} aria-label="Courier">
+                <option value="">All couriers</option>
+                {couriers.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
+            )}
             <Select value={values.direction ?? ""} onChange={(e) => set({ direction: e.target.value || null })} aria-label="Direction">
               <option value="">All shipments</option>
               <option value="FORWARD">Packages only</option>
@@ -204,11 +206,10 @@ export default function PackagesPage() {
               <thead className={table.head}>
                 <tr>
                   <th className={table.th}>Recipient</th>
-                  <th className={table.th}>Courier</th>
+                  <th className={table.th}>From</th>
                   <th className={table.th}>Tracking no.</th>
                   <th className={table.th}>Status</th>
                   <th className={table.th}>Delivery</th>
-                  <th className={cx(table.th, "text-right")}>Price</th>
                   <th className={table.th}><span className="sr-only">Open</span></th>
                 </tr>
               </thead>
@@ -228,15 +229,13 @@ export default function PackagesPage() {
                       </Link>
                     </td>
                     <td className={cx(table.td, "text-neutral-700")}>
-                      {s.provider_name ?? <span className="text-neutral-400">Not chosen</span>}
-                      <span className="block text-xs text-neutral-400">from {s.from_name}</span>
+                      {s.from_name}
                     </td>
                     <td className={cx(table.td, "font-mono text-xs text-neutral-700")}>{s.tracking_number ?? "—"}</td>
                     <td className={table.td}><StatusBadge status={s.status} /></td>
                     <td className={cx(table.td, "text-neutral-700")}>
                       {s.delivered_at ? dateOnly(s.delivered_at) : s.expected_delivery_date ? <span className="text-neutral-500">Exp. {dateOnly(s.expected_delivery_date)}</span> : "—"}
                     </td>
-                    <td className={cx(table.td, "text-right font-semibold text-neutral-900")}>{money(s.final_price ?? s.quoted_price)}</td>
                     <td className={cx(table.td, "w-10")}>
                       <Link href={`/packages/${s.id}`} aria-label={`Open package to ${s.recipient_name}`} className="text-neutral-300 transition group-hover:text-brand-600">
                         <ArrowUpRight className="h-4 w-4" />
@@ -272,10 +271,8 @@ export default function PackagesPage() {
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-3 border-t border-neutral-100 pt-3 text-xs text-neutral-500">
                     <span className="min-w-0 truncate">
-                      {s.provider_name ?? "No courier"}
-                      {s.tracking_number && <span className="font-mono"> · {s.tracking_number}</span>}
+                      {s.tracking_number ? <span className="font-mono">{s.tracking_number}</span> : "Not booked yet"}
                     </span>
-                    <span className="shrink-0 font-semibold text-neutral-900">{money(s.final_price ?? s.quoted_price)}</span>
                   </div>
                   {(s.delivered_at || s.expected_delivery_date) && (
                     <p className="mt-1.5 text-xs text-neutral-500">

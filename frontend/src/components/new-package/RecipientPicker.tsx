@@ -17,7 +17,7 @@ export interface Picked {
 export type Selection = { dentists: Record<number, Picked>; executives: Record<number, Picked> };
 type Kind = keyof Selection;
 
-const LIMIT = 50;
+const LIMIT = 10;
 
 /** Tick dentists and executives, filtered by state, city, name, address or pincode. */
 export function RecipientPicker({ value, onChange }: { value: Selection; onChange: (next: Selection) => void }) {

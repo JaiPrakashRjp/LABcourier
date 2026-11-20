@@ -10,7 +10,7 @@ import type { City, Page, Person, PersonKind, State } from "@/lib/types";
 import { PersonForm } from "./PersonForm";
 import { Alert, Avatar, Button, Card, EmptyState, Input, Modal, PageHeader, Pagination, Select, TableSkeleton, cx, table } from "./ui";
 
-const LIMIT = 25;
+const LIMIT = 10;
 const LABELS: Record<PersonKind, { title: string; subtitle: string; add: string; detail: string; icon: React.ElementType }> = {
   dentists: { title: "Dentists", subtitle: "Doctors who receive packages from your labs.", add: "Add dentist", detail: "Clinic", icon: Stethoscope },
   executives: { title: "Executives", subtitle: "Executives who receive packages.", add: "Add executive", detail: "Designation", icon: Users },

@@ -31,8 +31,9 @@ router = APIRouter(tags=["packages"])
 
 @router.get("/couriers")
 def couriers(user: CurrentUser, db: DB) -> list[dict]:
+    # Only couriers this company has an account with, so unused ones never appear in the app.
     return [{"id": p.id, "code": p.code, "name": p.name, "supports_cancel": p.supports_cancel}
-            for p in couriers_dao.active_providers(db)]
+            for p in couriers_dao.active_providers(db) if couriers_dao.default_api_key(db, user.company_id, p.id)]
 
 
 # ---- Package requests (batches) ----
@@ -90,6 +91,14 @@ def saved_quotes(batch_id: int, user: AdminUser, db: DB):
 def book(batch_id: int, data: BookIn, user: AdminUser, db: DB, tasks: BackgroundTasks):
     """One click books every package; progress is read from GET /batches/{id}."""
     batch = booking_service.start_booking(db, user, batch_id, data)
+    tasks.add_task(booking_service.run_booking, batch.id)
+    return batch_out(shipments_dao.get_batch(db, user.company_id, batch.id), user)
+
+
+@router.post("/batches/{batch_id}/book-now", response_model=BatchOut, status_code=202)
+def book_now(batch_id: int, user: AdminUser, db: DB, tasks: BackgroundTasks):
+    """Books without the price-comparison step (postpaid, single courier)."""
+    batch = booking_service.start_direct_booking(db, user, batch_id)
     tasks.add_task(booking_service.run_booking, batch.id)
     return batch_out(shipments_dao.get_batch(db, user.company_id, batch.id), user)
 
