@@ -165,6 +165,21 @@ def delete_batch(db: Session, batch: ShipmentBatch) -> None:
     db.delete(batch)
 
 
+def labels_booked_between(db: Session, company_id: int, start: datetime, end: datetime) -> list[Shipment]:
+    """Booked packages with a saved label, oldest first. Cancelled and failed ones are left out."""
+    return list(db.scalars(
+        select(Shipment)
+        .where(
+            Shipment.company_id == company_id,
+            Shipment.label_path.is_not(None),
+            Shipment.booked_at >= start,
+            Shipment.booked_at < end,
+            Shipment.status.not_in(["CANCELLED", "BOOKING_FAILED"]),
+        )
+        .order_by(Shipment.booked_at, Shipment.id)
+    ))
+
+
 def add_shipment(db: Session, **values) -> Shipment:
     shipment = Shipment(**values)
     db.add(shipment)

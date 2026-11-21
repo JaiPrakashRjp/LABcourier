@@ -20,6 +20,7 @@ import {
   table,
 } from "@/components/ui";
 import { DraftsPanel } from "@/components/DraftsPanel";
+import { LabelsDownload } from "@/components/LabelsDownload";
 import { useAuth } from "@/lib/auth";
 import { STATUS_FILL, STATUS_LABELS, STATUS_ORDER, dateOnly } from "@/lib/format";
 import { ROLES, type City, type Courier, type Page, type Person, type Shipment, type State } from "@/lib/types";
@@ -76,7 +77,14 @@ export default function PackagesPage() {
       <PageHeader
         title="Packages"
         subtitle={isAdmin ? "Every package and return in one place." : "Packages sent to you, and their returns."}
-        actions={isAdmin && <LinkButton href="/packages/new"><PackagePlus className="h-4 w-4" /> New package</LinkButton>}
+        actions={
+          isAdmin && (
+            <>
+              <LabelsDownload />
+              <LinkButton href="/packages/new"><PackagePlus className="h-4 w-4" /> New package</LinkButton>
+            </>
+          )
+        }
       />
 
       {isAdmin && <DraftsPanel />}

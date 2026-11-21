@@ -1,8 +1,8 @@
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app.api.deps import DB, AdminUser, CurrentUser
 from app.dao import couriers_dao, shipments_dao
@@ -21,6 +21,7 @@ from app.schemas.packages import (
 )
 from app.services import booking_service, label_service, quote_service, return_service, tracking_service
 from app.core.constants import BatchStatus
+from app.couriers.utils import IST
 from app.services.errors import AppError, NotFound
 from app.services.shipment_view import batch_out, return_out, shipment_detail, shipment_out
 
@@ -122,6 +123,38 @@ def batch_labels(batch_id: int, user: AdminUser, db: DB):
         raise NotFound("Labels are not ready yet")
     return FileResponse(label_service.resolve(batch.merged_label_path), media_type="application/pdf",
                         filename=f"labels_batch_{batch_id}.pdf")
+
+
+# ---- Labels for a day or a date range (one PDF) ----
+
+MAX_LABEL_DAYS = 31
+
+
+def _labels_in_range(db, user, date_from: date, date_to: date):
+    if date_to < date_from:
+        raise AppError("The end date must be on or after the start date")
+    if (date_to - date_from).days >= MAX_LABEL_DAYS:
+        raise AppError(f"Choose up to {MAX_LABEL_DAYS} days at a time")
+    start = datetime.combine(date_from, datetime.min.time(), IST)
+    end = datetime.combine(date_to + timedelta(days=1), datetime.min.time(), IST)
+    return shipments_dao.labels_booked_between(db, user.company_id, start, end)
+
+
+@router.get("/labels/summary")
+def labels_summary(user: AdminUser, db: DB, date_from: date, date_to: date) -> dict:
+    """How many labels a date range has, so the screen can say so before downloading."""
+    return {"count": len(_labels_in_range(db, user, date_from, date_to))}
+
+
+@router.get("/labels.pdf")
+def labels_for_dates(user: AdminUser, db: DB, date_from: date, date_to: date):
+    """Every label for packages booked in the range, in one PDF, oldest first."""
+    shipments = _labels_in_range(db, user, date_from, date_to)
+    if not shipments:
+        raise NotFound("No labels for packages booked on these dates")
+    pdf = label_service.merge_files([s.label_path for s in shipments])
+    name = f"labels_{date_from}" + ("" if date_to == date_from else f"_to_{date_to}") + ".pdf"
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 # ---- Packages (shipments) ----
