@@ -1,13 +1,13 @@
 from sqlalchemy.orm import Session
 
 from app.dao import locations_dao, people_dao
-from app.models import Dentist, Executive, Lab, User
+from app.models import Dentist, Executive, Lab, Sender, User
 from app.schemas.common import Page
-from app.schemas.people import DentistIn, ExecutiveIn, LabIn, PersonOut
+from app.schemas.people import DentistIn, ExecutiveIn, LabIn, PersonOut, SenderIn
 from app.services.errors import AppError, NotFound
 
-KINDS = {"dentists": Dentist, "executives": Executive, "labs": Lab}
-LABELS = {Dentist: "dentist", Executive: "executive", Lab: "lab"}
+KINDS = {"dentists": Dentist, "executives": Executive, "labs": Lab, "senders": Sender}
+LABELS = {Dentist: "dentist", Executive: "executive", Lab: "lab", Sender: "sender"}
 
 
 def to_out(record) -> PersonOut:
@@ -50,7 +50,7 @@ def _place(db: Session, pincode: str) -> dict:
     return {"city_id": pin.city_id, "state_id": pin.state_id}
 
 
-def create(db: Session, user: User, model, data: DentistIn | ExecutiveIn | LabIn) -> PersonOut:
+def create(db: Session, user: User, model, data: DentistIn | ExecutiveIn | LabIn | SenderIn) -> PersonOut:
     values = {**data.model_dump(), **_place(db, data.pincode)}
     if model is not Lab:
         existing = people_dao.find_by_phone(db, model, user.company_id, data.phone)
@@ -70,7 +70,8 @@ def create(db: Session, user: User, model, data: DentistIn | ExecutiveIn | LabIn
     return to_out(record)
 
 
-def update(db: Session, user: User, model, record_id: int, data: DentistIn | ExecutiveIn | LabIn) -> PersonOut:
+def update(db: Session, user: User, model, record_id: int,
+           data: DentistIn | ExecutiveIn | LabIn | SenderIn) -> PersonOut:
     record = people_dao.get(db, model, user.company_id, record_id)
     if not record:
         raise NotFound(f"{LABELS[model].title()} not found")

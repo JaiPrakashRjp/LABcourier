@@ -64,7 +64,9 @@ export function ProgressStep({ batch, onChange }: { batch: Batch; onChange: (b: 
               {running ? "Booking your packages…" : batch.failed_count ? "Booked, with some failures" : "All packages booked"}
             </h2>
             <p className="mt-0.5 text-sm text-neutral-500">
-              From {batch.lab_name} · {batch.total_count} recipients
+              {batch.category === "ASSET"
+                ? `From ${batch.sender_name ?? "sender"} to ${batch.lab_name}`
+                : `From ${batch.lab_name} · ${batch.total_count} recipients`}
             </p>
           </div>
           <div className="grid w-full grid-cols-3 divide-x divide-neutral-100 rounded-xl bg-neutral-50 py-3 text-center sm:flex sm:w-auto sm:gap-6 sm:divide-x-0 sm:bg-transparent sm:py-0">

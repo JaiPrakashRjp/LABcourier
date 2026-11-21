@@ -19,6 +19,7 @@ from app.models import (
 @dataclass
 class ShipmentFilters:
     status: list[str] | None = None
+    category: str | None = None
     provider_id: int | None = None
     lab_id: int | None = None
     batch_id: int | None = None
@@ -49,6 +50,8 @@ def scope_to_user(stmt, user: User):
 def apply_filters(stmt, f: ShipmentFilters):
     if f.status:
         stmt = stmt.where(Shipment.status.in_(f.status))
+    if f.category:
+        stmt = stmt.where(Shipment.category == f.category)
     if f.provider_id:
         stmt = stmt.where(Shipment.provider_id == f.provider_id)
     if f.lab_id:
@@ -143,11 +146,14 @@ def get_batch(db: Session, company_id: int, batch_id: int, lock: bool = False) -
     return db.scalars(stmt).unique().first()
 
 
-def unbooked_batches(db: Session, company_id: int, statuses: list[str]) -> list[ShipmentBatch]:
+def unbooked_batches(db: Session, company_id: int, statuses: list[str],
+                     category: str | None = None) -> list[ShipmentBatch]:
     """Package requests saved but not booked yet, newest first."""
+    stmt = select(ShipmentBatch).where(ShipmentBatch.company_id == company_id, ShipmentBatch.status.in_(statuses))
+    if category:
+        stmt = stmt.where(ShipmentBatch.category == category)
     return list(db.scalars(
-        select(ShipmentBatch)
-        .where(ShipmentBatch.company_id == company_id, ShipmentBatch.status.in_(statuses))
+        stmt
         .options(selectinload(ShipmentBatch.shipments))
         .order_by(ShipmentBatch.created_at.desc())
     ).unique())
@@ -165,11 +171,13 @@ def delete_batch(db: Session, batch: ShipmentBatch) -> None:
     db.delete(batch)
 
 
-def labels_booked_between(db: Session, company_id: int, start: datetime, end: datetime) -> list[Shipment]:
+def labels_booked_between(db: Session, company_id: int, start: datetime, end: datetime,
+                          category: str | None = None) -> list[Shipment]:
     """Booked packages with a saved label, oldest first. Cancelled and failed ones are left out."""
     return list(db.scalars(
         select(Shipment)
         .where(
+            *([Shipment.category == category] if category else []),
             Shipment.company_id == company_id,
             Shipment.label_path.is_not(None),
             Shipment.booked_at >= start,

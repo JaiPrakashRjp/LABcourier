@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ArrowRight, Box, Building2, Stethoscope, Users, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Alert, Avatar, Button, Card, Field, Input, SectionTitle } from "@/components/ui";
+import { Alert, Avatar, Button, Card, Field, Input, SectionTitle, cx } from "@/components/ui";
 import { toast } from "sonner";
 import { api, errorMessage } from "@/lib/api";
 import type { Batch } from "@/lib/types";
@@ -12,7 +12,9 @@ import { RecipientPicker, type Selection } from "./RecipientPicker";
 export interface Draft {
   lab: PickedLab | null;
   recipients: Selection;
+  /** The weight as typed, in weight_unit. */
   weight_g: string;
+  weight_unit?: "g" | "kg";
   length_cm: string;
   breadth_cm: string;
   height_cm: string;
@@ -26,6 +28,7 @@ export const EMPTY_DRAFT: Draft = {
   lab: null,
   recipients: { dentists: {}, executives: {} },
   weight_g: "",
+  weight_unit: "g",
   length_cm: "",
   breadth_cm: "",
   height_cm: "",
@@ -73,11 +76,29 @@ export function recipientCount(d: Draft) {
   return Object.keys(d.recipients.dentists).length + Object.keys(d.recipients.executives).length;
 }
 
+type WeightFields = { weight_g: string; weight_unit?: "g" | "kg" };
+
+/** The typed weight in grams (NaN when empty or not a number). */
+export function weightGrams(d: WeightFields): number {
+  if (!d.weight_g.trim()) return NaN;
+  const v = Number(d.weight_g);
+  if (!Number.isFinite(v)) return NaN;
+  return d.weight_unit === "kg" ? Math.round(v * 1000) : v;
+}
+
+/** "500 g" or "1.25 kg", for the summary and review. */
+export function weightText(d: WeightFields): string {
+  const g = weightGrams(d);
+  if (!Number.isFinite(g) || g <= 0) return "";
+  return g >= 1000 ? `${Number((g / 1000).toFixed(3))} kg` : `${g} g`;
+}
+
 function validate(d: Draft): string {
   if (!d.lab) return "Choose the lab sending the package";
   if (recipientCount(d) === 0) return "Tick at least one dentist or executive";
-  const w = Number(d.weight_g);
-  if (!Number.isInteger(w) || w < 1 || w > 35000) return "Enter the weight in whole grams (1 to 35,000)";
+  const w = weightGrams(d);
+  if (!Number.isInteger(w) || w < 1 || w > 35000)
+    return d.weight_unit === "kg" ? "Enter the weight in kg (0.001 to 35 kg)" : "Enter the weight in whole grams (1 to 35,000 g)";
   if (d.contents.trim().length < 2) return "Describe the contents";
   // Couriers take at most 150 cm on any side; say which box is wrong.
   for (const [key, label] of [["length_cm", "Length"], ["breadth_cm", "Breadth"], ["height_cm", "Height"]] as const) {
@@ -140,7 +161,7 @@ function Summary({ draft, onRemove }: { draft: Draft; onRemove?: (kind: keyof Se
           <Box className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" />
           <div>
             <p className="text-xs text-neutral-500">Package</p>
-            <p className="font-semibold text-neutral-900">{draft.weight_g ? `${draft.weight_g} g` : <span className="font-normal text-neutral-400">Weight not set</span>}</p>
+            <p className="font-semibold text-neutral-900">{weightText(draft) || <span className="font-normal text-neutral-400">Weight not set</span>}</p>
             <p className="text-xs text-neutral-500">{dims}</p>
           </div>
         </div>
@@ -196,7 +217,7 @@ export function DetailsStep({
           lab_id: draft.lab!.id,
           dentist_ids: Object.keys(draft.recipients.dentists).map(Number),
           executive_ids: Object.keys(draft.recipients.executives).map(Number),
-          weight_g: Number(draft.weight_g),
+          weight_g: weightGrams(draft),
           length_cm: num(draft.length_cm),
           breadth_cm: num(draft.breadth_cm),
           height_cm: num(draft.height_cm),
@@ -234,7 +255,7 @@ export function DetailsStep({
             <SectionTitle title="Package" description="Same for each recipient" icon={<Box className="h-5 w-5" />} />
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <div><dt className="text-neutral-500">Contents</dt><dd className="font-medium text-neutral-900">{draft.contents}</dd></div>
-              <div><dt className="text-neutral-500">Weight</dt><dd className="font-medium text-neutral-900">{draft.weight_g} g</dd></div>
+              <div><dt className="text-neutral-500">Weight</dt><dd className="font-medium text-neutral-900">{weightText(draft)}</dd></div>
               <div><dt className="text-neutral-500">Size</dt><dd className="font-medium text-neutral-900">{draft.length_cm ? `${draft.length_cm} × ${draft.breadth_cm || "—"} × ${draft.height_cm || "—"} cm` : "Not given"}</dd></div>
               {draft.declared_value && <div><dt className="text-neutral-500">Declared value</dt><dd className="font-medium text-neutral-900">₹{draft.declared_value}</dd></div>}
             </dl>
@@ -282,8 +303,8 @@ export function DetailsStep({
             <Field label="Contents">
               <Input value={draft.contents} onChange={set("contents")} required />
             </Field>
-            <Field label="Weight (grams)">
-              <Input inputMode="numeric" value={draft.weight_g} onChange={set("weight_g")} placeholder="e.g. 500" required />
+            <Field label="Weight">
+              <WeightInput draft={draft} setDraft={setDraft} />
             </Field>
           </div>
           <div className="mt-4 grid grid-cols-3 gap-3">
@@ -308,5 +329,52 @@ export function DetailsStep({
         </Button>
       </div>
     </form>
+  );
+}
+
+/** Weight box with a g / kg switch. Only numbers can be typed; switching converts the value. */
+export function WeightInput<T extends WeightFields>({ draft, setDraft }: { draft: T; setDraft: (d: T) => void }) {
+  const unit = draft.weight_unit ?? "g";
+  const clean = (raw: string, u: "g" | "kg") => {
+    if (u === "g") return raw.replace(/\D/g, "").slice(0, 5);
+    // kg: digits with one decimal point and up to 3 decimals (gram precision).
+    const [whole, ...rest] = raw.replace(/[^\d.]/g, "").split(".");
+    return rest.length ? `${whole.slice(0, 2)}.${rest.join("").slice(0, 3)}` : whole.slice(0, 2);
+  };
+  const switchTo = (u: "g" | "kg") => {
+    if (u === unit) return;
+    const g = weightGrams(draft);
+    const value = Number.isFinite(g) && g > 0 ? (u === "kg" ? String(Number((g / 1000).toFixed(3))) : String(g)) : "";
+    setDraft({ ...draft, weight_unit: u, weight_g: value });
+  };
+  return (
+    <div className="flex">
+      <Input
+        inputMode={unit === "kg" ? "decimal" : "numeric"}
+        value={draft.weight_g}
+        onChange={(e) => setDraft({ ...draft, weight_unit: unit, weight_g: clean(e.target.value, unit) })}
+        placeholder={unit === "kg" ? "e.g. 0.5" : "e.g. 500"}
+        className="rounded-r-none"
+        aria-label={`Weight in ${unit === "kg" ? "kilograms" : "grams"}`}
+        required
+      />
+      <div className="flex shrink-0 rounded-r-xl border border-l-0 border-neutral-200 bg-neutral-50 p-1" role="radiogroup" aria-label="Weight unit">
+        {(["g", "kg"] as const).map((u) => (
+          <button
+            key={u}
+            type="button"
+            role="radio"
+            aria-checked={unit === u}
+            onClick={() => switchTo(u)}
+            className={cx(
+              "min-w-[2.75rem] rounded-lg px-2.5 text-sm font-semibold transition-colors",
+              unit === u ? "bg-white text-brand-700 shadow-sm ring-1 ring-neutral-200" : "text-neutral-500 hover:text-neutral-800",
+            )}
+          >
+            {u}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

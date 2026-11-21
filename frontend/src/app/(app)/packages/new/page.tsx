@@ -3,10 +3,12 @@
 import { ArrowRight, BadgeIndianRupee, Check, ClipboardCheck, PackageCheck, PenLine } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Card, FullPageSpinner, PageHeader, cx } from "@/components/ui";
+import { AssetStep } from "@/components/new-package/AssetStep";
 import { DetailsStep, useDraft } from "@/components/new-package/DetailsStep";
 import { ProgressStep } from "@/components/new-package/ProgressStep";
 import { QuotesStep } from "@/components/new-package/QuotesStep";
 import { api, errorMessage } from "@/lib/api";
+import { useCategory } from "@/lib/category";
 import type { Batch } from "@/lib/types";
 import { useUrlState } from "@/lib/useUrlState";
 
@@ -32,6 +34,7 @@ const BOOK_STEP = STEPS.length - 1;
  */
 export default function NewPackagePage() {
   const { values, update } = useUrlState();
+  const { category } = useCategory();
   const { draft, setDraft, ready, clear } = useDraft();
   const batchId = values.batch ? Number(values.batch) : null;
   const [batch, setBatch] = useState<Batch | null>(null);
@@ -104,7 +107,19 @@ export default function NewPackagePage() {
 
       {error && <Alert>{error}</Alert>}
 
-      {!batchId &&
+      {!batchId && category === "ASSET" && (
+        <AssetStep
+          reviewing={step === 1}
+          onReview={() => update({ step: "review" }, { push: true })}
+          onEdit={() => update({ step: null })}
+          onCreated={(b) => {
+            setBatch(b);
+            update({ step: null, batch: b.id });
+          }}
+        />
+      )}
+
+      {!batchId && category !== "ASSET" &&
         (ready ? (
           <DetailsStep
             draft={draft}
@@ -149,7 +164,10 @@ function BookNow({ batch, onBooked }: { batch: Batch; onBooked: (b: Batch) => vo
     <Card className="mx-auto max-w-xl p-6 text-center">
       <p className="font-display text-lg font-bold text-neutral-900">Ready to book</p>
       <p className="mt-1 text-sm text-neutral-500">
-        {batch.lab_name} → {batch.total_count} recipient{batch.total_count === 1 ? "" : "s"} · {batch.contents} · {batch.weight_g} g
+        {batch.category === "ASSET"
+          ? `${batch.sender_name ?? "Sender"} → ${batch.lab_name}`
+          : `${batch.lab_name} → ${batch.total_count} recipient${batch.total_count === 1 ? "" : "s"}`}{" "}
+        · {batch.contents} · {batch.weight_g} g
       </p>
       {error && <div className="mt-4 text-left"><Alert>{error}</Alert></div>}
       <Button size="lg" className="mt-6" onClick={book} loading={busy}>

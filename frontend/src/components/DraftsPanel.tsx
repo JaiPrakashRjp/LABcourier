@@ -10,7 +10,9 @@ import { Button, Card, LinkButton, Modal } from "./ui";
 
 interface Draft {
   id: number;
+  category?: "DENTAL" | "ASSET";
   lab_name: string;
+  sender_name?: string | null;
   contents: string;
   weight_g: number;
   status: string;
@@ -20,8 +22,8 @@ interface Draft {
 }
 
 /** Packages that were saved but never booked: continue them or delete them. */
-export function DraftsPanel() {
-  const { data, reload } = useApi<Draft[]>("/batches/drafts");
+export function DraftsPanel({ category }: { category?: "DENTAL" | "ASSET" }) {
+  const { data, reload } = useApi<Draft[]>("/batches/drafts", { category });
   const [deleting, setDeleting] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -57,7 +59,8 @@ export function DraftsPanel() {
           <li key={d.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
             <div className="min-w-0">
               <p className="truncate font-semibold text-neutral-900">
-                {d.lab_name} <span className="font-normal text-neutral-400">→</span> {names(d)}
+                {d.category === "ASSET" ? d.sender_name : d.lab_name} <span className="font-normal text-neutral-400">→</span>{" "}
+                {d.category === "ASSET" ? d.lab_name : names(d)}
               </p>
               <p className="text-xs text-neutral-500">
                 {d.contents} · {d.weight_g} g · {d.total_count} recipient{d.total_count === 1 ? "" : "s"} · saved {dateOnly(d.created_at)}

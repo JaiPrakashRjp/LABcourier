@@ -136,6 +136,23 @@ class LabIn(_Person):
         return _text(v, "Contact person", 2, 100, required=False, name=True)
 
 
+class SenderIn(_Person):
+    """Someone who sends assets to a lab (a supplier, a company or a person)."""
+
+    name: str
+    contact_person: str | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _v_name(cls, v):
+        return _text(v, "Sender name", 2, 150, required=True)
+
+    @field_validator("contact_person", mode="before")
+    @classmethod
+    def _v_contact(cls, v):
+        return _text(v, "Contact person", 2, 100, required=False, name=True)
+
+
 class PersonOut(BaseModel):
     id: int
     name: str

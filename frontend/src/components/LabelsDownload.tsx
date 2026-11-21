@@ -17,19 +17,19 @@ function isoDay(offsetDays = 0) {
 }
 
 /** "Download labels" button and dialog: every label for packages booked on a day or between two dates, in one PDF. */
-export function LabelsDownload() {
+export function LabelsDownload({ category }: { category?: "DENTAL" | "ASSET" }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <Button variant="secondary" onClick={() => setOpen(true)}>
         <Printer className="h-4 w-4" /> Download labels
       </Button>
-      {open && <LabelsDialog onClose={() => setOpen(false)} />}
+      {open && <LabelsDialog category={category} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-function LabelsDialog({ onClose }: { onClose: () => void }) {
+function LabelsDialog({ category, onClose }: { category?: "DENTAL" | "ASSET"; onClose: () => void }) {
   const [range, setRange] = useState<Range>("today");
   const [from, setFrom] = useState(isoDay());
   const [to, setTo] = useState(isoDay());
@@ -40,14 +40,14 @@ function LabelsDialog({ onClose }: { onClose: () => void }) {
     : range === "yesterday" ? { date_from: isoDay(-1), date_to: isoDay(-1) }
     : { date_from: from, date_to: to };
   const ready = !!dates.date_from && !!dates.date_to;
-  const summary = useApi<{ count: number }>(ready ? "/labels/summary" : null, dates);
+  const summary = useApi<{ count: number }>(ready ? "/labels/summary" : null, { ...dates, category });
   const count = summary.data?.count ?? 0;
 
   async function download() {
     setBusy(true);
     try {
       const name = `labels_${dates.date_from}${dates.date_to !== dates.date_from ? `_to_${dates.date_to}` : ""}.pdf`;
-      await openFile(`/labels.pdf?date_from=${dates.date_from}&date_to=${dates.date_to}`, name);
+      await openFile(`/labels.pdf?date_from=${dates.date_from}&date_to=${dates.date_to}${category ? `&category=${category}` : ""}`, name);
       onClose();
     } catch (err) {
       toast.error(errorMessage(err));

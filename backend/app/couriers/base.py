@@ -116,6 +116,8 @@ class TrackingEvent:
     location: str | None
     event_at: datetime
     raw: dict | None = None
+    # Promised delivery date, when a courier sends one with the update (Shadowfax webhooks can).
+    expected_date: date | None = None
 
 
 @dataclass

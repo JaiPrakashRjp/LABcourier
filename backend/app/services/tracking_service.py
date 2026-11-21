@@ -140,7 +140,7 @@ def handle_webhook(db: Session, provider_code: str, payload: dict | list) -> int
                 # The same code can mean something else on a return (e.g. "returned to seller" = back at the lab).
                 if shipment.direction == Direction.RETURN:
                     event.status = adapter.return_status(event.code) or event.status
-                updated += apply_events(db, shipment, [event], EventSource.WEBHOOK)
+                updated += apply_events(db, shipment, [event], EventSource.WEBHOOK, event.expected_date)
         entry.processed = True
         db.commit()
         return updated

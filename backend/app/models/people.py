@@ -108,6 +108,30 @@ class Lab(Base, TimestampMixin, AddressMixin):
     state: Mapped[State] = relationship(lazy="joined")
 
 
+class Sender(Base, TimestampMixin, AddressMixin):
+    """Someone who sends assets (equipment, parts, software) to a lab."""
+
+    __tablename__ = "senders"
+    __table_args__ = (
+        UniqueConstraint("company_id", "phone"),
+        Index("ix_senders_company_pincode", "company_id", "pincode"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    contact_person: Mapped[str | None] = mapped_column(String(100))
+    phone: Mapped[str] = mapped_column(String(10), nullable=False)
+    email: Mapped[str | None] = mapped_column(String(120))
+    city_id: Mapped[int] = mapped_column(ForeignKey("cities.id"), nullable=False)
+    state_id: Mapped[int] = mapped_column(ForeignKey("states.id"), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", use_alter=True))
+
+    city: Mapped[City] = relationship(lazy="joined")
+    state: Mapped[State] = relationship(lazy="joined")
+
+
 class User(Base, TimestampMixin):
     __tablename__ = "users"
     __table_args__ = (

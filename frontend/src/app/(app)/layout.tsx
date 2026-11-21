@@ -3,8 +3,11 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import {
+  Boxes,
   Building2,
+  Check,
   ChevronDown,
+  Factory,
   LayoutDashboard,
   LogOut,
   Menu as MenuIcon,
@@ -12,6 +15,7 @@ import {
   PackagePlus,
   PanelLeftClose,
   PanelLeftOpen,
+  PhoneCall,
   Stethoscope,
   Users,
   X,
@@ -19,8 +23,10 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { Avatar, FullPageSpinner, LinkButton, Logo, cx } from "@/components/ui";
+import { Avatar, FullPageSpinner, Logo, cx } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
+import { CATEGORY_LABELS, CategoryProvider, useCategory, type Category } from "@/lib/category";
+import { HELPLINE_TEL, HELPLINE_TEXT } from "@/lib/support";
 import { ROLES } from "@/lib/types";
 
 const NAV = [
@@ -38,12 +44,87 @@ const NAV = [
       { href: "/dentists", label: "Dentists", icon: Stethoscope, admin: true },
       { href: "/executives", label: "Executives", icon: Users, admin: true },
       { href: "/labs", label: "Labs", icon: Building2, admin: true },
+      { href: "/senders", label: "Senders", icon: Factory, admin: true },
     ],
   },
 ];
 
 // Pages only admins may open; others are sent to the dashboard.
-const ADMIN_ONLY = ["/packages/new", "/dentists", "/executives", "/labs"];
+const ADMIN_ONLY = ["/packages/new", "/dentists", "/executives", "/labs", "/senders"];
+
+const CATEGORY_ICONS: Record<Category, React.ElementType> = { DENTAL: Stethoscope, ASSET: Boxes };
+
+/** Shipping type (admins): Dental Lab Work or Assets. Packages and New package follow it. */
+function CategorySwitch({ collapsed, onNavigate }: { collapsed: boolean; onNavigate: (href: string) => void }) {
+  const { category, setCategory } = useCategory();
+  const router = useRouter();
+  const pathname = usePathname();
+  const change = (next: Category) => {
+    if (next === category) return;
+    setCategory(next);
+    // Leave a page that belongs to the other type.
+    const target = pathname.startsWith("/packages/new") ? "/packages/new" : /^\/packages\/\d+/.test(pathname) ? "/packages" : null;
+    if (target) {
+      onNavigate(target);
+      router.push(target);
+    }
+  };
+  const CurrentIcon = CATEGORY_ICONS[category];
+  if (collapsed) {
+    const Icon = CurrentIcon;
+    return (
+      <button
+        type="button"
+        onClick={() => change(category === "ASSET" ? "DENTAL" : "ASSET")}
+        title={`Showing ${CATEGORY_LABELS[category]}. Click to switch.`}
+        aria-label={`Showing ${CATEGORY_LABELS[category]}. Switch shipping type`}
+        className="mb-1 flex min-h-[40px] w-full items-center justify-center rounded-xl bg-white/5 text-brand-300 ring-1 ring-white/10 hover:bg-white/10"
+      >
+        <Icon className="h-[18px] w-[18px]" />
+      </button>
+    );
+  }
+  return (
+    <Menu.Root>
+      <Menu.Trigger
+        aria-label="Shipping type"
+        className="group mb-2 flex h-11 w-full items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 text-left text-sm font-semibold text-white outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-brand-500/40 data-[state=open]:bg-white/10"
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-600/20 text-brand-300">
+          <CurrentIcon className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1 truncate">{CATEGORY_LABELS[category]}</span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-neutral-400 transition-transform duration-150 group-data-[state=open]:rotate-180" />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Content
+          align="start"
+          sideOffset={6}
+          className="z-50 w-[var(--radix-dropdown-menu-trigger-width)] rounded-xl border border-white/10 bg-neutral-900 p-1.5 text-neutral-300 shadow-pop data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+        >
+          {(Object.keys(CATEGORY_LABELS) as Category[]).map((c) => {
+            const Icon = CATEGORY_ICONS[c];
+            const selected = c === category;
+            return (
+              <Menu.Item
+                key={c}
+                onSelect={() => change(c)}
+                className={cx(
+                  "flex min-h-[40px] cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium outline-none transition-colors data-[highlighted]:bg-white/10 data-[highlighted]:text-white",
+                  selected && "text-white",
+                )}
+              >
+                <Icon className={cx("h-4 w-4", selected ? "text-brand-400" : "text-neutral-500")} />
+                <span className="flex-1">{CATEGORY_LABELS[c]}</span>
+                {selected && <Check className="h-4 w-4 text-brand-400" />}
+              </Menu.Item>
+            );
+          })}
+        </Menu.Content>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
 
 function isActive(pathname: string, href: string) {
   if (href === "/packages") return pathname === "/packages" || /^\/packages\/\d+/.test(pathname);
@@ -95,6 +176,7 @@ function Sidebar({
               ) : (
                 <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">{group.section}</p>
               )}
+              {group.section === "Shipping" && isAdmin && <CategorySwitch collapsed={collapsed} onNavigate={onNavigate} />}
               <ul className="space-y-1">
                 {items.map((item) => {
                   const active = isActive(current, item.href);
@@ -130,23 +212,68 @@ function Sidebar({
             </div>
           );
         })}
+
+        {/* Courier helpline: opens the phone's dialer. */}
+        <div>
+          {collapsed ? (
+            <div className="mx-3 mb-4 h-px bg-white/10" aria-hidden />
+          ) : (
+            <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Help</p>
+          )}
+          <a
+            href={`tel:${HELPLINE_TEL}`}
+            title={collapsed ? `Courier helpline · ${HELPLINE_TEXT}` : undefined}
+            className={cx(
+              "group flex min-h-[44px] touch-manipulation items-center gap-3 rounded-xl text-sm font-medium text-neutral-400 transition-colors duration-100 hover:bg-white/5 hover:text-white active:bg-white/10",
+              collapsed ? "justify-center px-0" : "px-3",
+            )}
+          >
+            <PhoneCall className="h-[18px] w-[18px] text-neutral-500 group-hover:text-brand-400" />
+            <span className={collapsed ? "sr-only" : "min-w-0"}>
+              <span className="block">Courier helpline</span>
+              <span className="block text-xs text-neutral-500">{HELPLINE_TEXT}</span>
+            </span>
+          </a>
+        </div>
       </nav>
-      {isAdmin &&
-        (collapsed ? (
-          <div className="flex justify-center px-2 pb-3">
-            <LinkButton href="/packages/new" size="sm" className="h-10 w-10 px-0" aria-label="New package">
-              <PackagePlus className="h-4 w-4" />
-            </LinkButton>
-          </div>
-        ) : (
-          <div className="m-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-sm font-semibold text-white">Ship to many at once</p>
-            <p className="mt-1 text-xs text-neutral-400">Send to many dentists and book them all in one click.</p>
-            <LinkButton href="/packages/new" size="sm" className="mt-3 w-full">
-              <PackagePlus className="h-4 w-4" /> New package
-            </LinkButton>
-          </div>
-        ))}
+      <UserFooter collapsed={collapsed} />
+    </div>
+  );
+}
+
+/** Who is signed in, and Log out, at the bottom of the side menu. */
+function UserFooter({ collapsed }: { collapsed: boolean }) {
+  const { user, logout } = useAuth();
+  if (!user) return null;
+  const logoutButton = (
+    <button
+      type="button"
+      onClick={() => void logout()}
+      title="Log out"
+      aria-label="Log out"
+      className="flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-lg text-rose-400 transition-colors hover:bg-rose-500/10 hover:text-rose-300 active:bg-rose-500/20"
+    >
+      <LogOut className="h-[18px] w-[18px]" />
+    </button>
+  );
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-1 border-t border-white/10 py-3" title={`${user.name} · ${user.company_name}`}>
+        <Avatar name={user.name} />
+        {logoutButton}
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2.5 border-t border-white/10 px-3 py-3">
+      <Avatar name={user.name} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold leading-tight text-white">{user.name}</p>
+        <p className="truncate text-xs text-neutral-500" title={`${user.company_name} · ${user.role_name}`}>
+          {user.company_name} · {user.role_name}
+        </p>
+      </div>
+      {logoutButton}
     </div>
   );
 }
@@ -162,7 +289,7 @@ function NavProgress({ active }: { active: boolean }) {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  const { status, user, logout } = useAuth();
+  const { status, user } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams().toString();
@@ -249,7 +376,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         </Dialog.Portal>
       </Dialog.Root>
 
-      <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-neutral-200/80 bg-white/80 px-3 backdrop-blur-xl backdrop-saturate-150 sm:px-8">
+      <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-neutral-200/80 bg-white/80 px-3 backdrop-blur-xl backdrop-saturate-150 sm:px-8 lg:hidden">
         <div className="flex min-w-0 items-center gap-2">
           <button
             className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-xl text-neutral-700 hover:bg-neutral-100 active:bg-neutral-200 lg:hidden"
@@ -261,41 +388,8 @@ function Shell({ children }: { children: React.ReactNode }) {
           <span className="min-w-0 lg:hidden">
             <Logo />
           </span>
-          <span className="hidden truncate text-sm font-medium text-neutral-500 sm:inline">{user.company_name}</span>
         </div>
 
-        <Menu.Root>
-          <Menu.Trigger className="flex touch-manipulation items-center gap-3 rounded-xl py-1.5 pl-1.5 pr-2 transition-colors duration-100 hover:bg-neutral-100 data-[state=open]:bg-neutral-100 sm:pr-3">
-            <Avatar name={user.name} />
-            <span className="hidden text-left sm:block">
-              <span className="block text-sm font-semibold leading-tight text-neutral-900">{user.name}</span>
-              <span className="block text-xs text-neutral-500">{user.role_name}</span>
-            </span>
-            <ChevronDown className="h-4 w-4 text-neutral-400" />
-          </Menu.Trigger>
-          <Menu.Portal>
-            <Menu.Content
-              align="end"
-              sideOffset={8}
-              className="z-50 w-64 rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-pop data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
-            >
-              <div className="flex items-center gap-3 px-3 py-3">
-                <Avatar name={user.name} />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-neutral-900">{user.name}</p>
-                  <p className="truncate text-xs text-neutral-500">+91 {user.phone} · {user.role_name}</p>
-                </div>
-              </div>
-              <Menu.Separator className="my-1 h-px bg-neutral-100" />
-              <Menu.Item
-                onSelect={() => void logout()}
-                className="flex min-h-[40px] cursor-pointer items-center gap-2 rounded-xl px-3 text-sm font-medium text-rose-600 outline-none data-[highlighted]:bg-rose-50"
-              >
-                <LogOut className="h-4 w-4" /> Sign out
-              </Menu.Item>
-            </Menu.Content>
-          </Menu.Portal>
-        </Menu.Root>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-8 sm:pt-8">{children}</main>
@@ -306,7 +400,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={<FullPageSpinner />}>
-      <Shell>{children}</Shell>
+      <CategoryProvider>
+        <Shell>{children}</Shell>
+      </CategoryProvider>
     </Suspense>
   );
 }

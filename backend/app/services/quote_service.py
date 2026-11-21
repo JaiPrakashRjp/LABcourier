@@ -4,10 +4,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 from sqlalchemy.orm import Session
 
-from app.core.constants import BatchStatus, RecipientType, ShipmentStatus
+from app.core.constants import BatchStatus, Category, RecipientType, ShipmentStatus
 from app.couriers.base import QuoteResult
 from app.dao import couriers_dao, people_dao, shipments_dao
-from app.models import CourierProvider, Dentist, Executive, Lab, ShipmentBatch, ShipmentQuote, User
+from app.models import CourierProvider, Dentist, Executive, Lab, Sender, ShipmentBatch, ShipmentQuote, User
 from app.schemas.packages import (
     BatchCreateIn,
     BatchQuotesOut,
@@ -30,6 +30,8 @@ def create_batch(db: Session, user: User, data: BatchCreateIn) -> ShipmentBatch:
     lab = people_dao.get(db, Lab, user.company_id, data.lab_id)
     if not lab:
         raise NotFound("Lab not found")
+    if data.category == Category.ASSET:
+        return _create_asset_batch(db, user, data, lab)
     dentists = people_dao.get_many(db, Dentist, user.company_id, list(dict.fromkeys(data.dentist_ids)))
     executives = people_dao.get_many(db, Executive, user.company_id, list(dict.fromkeys(data.executive_ids)))
     if len(dentists) != len(set(data.dentist_ids)) or len(executives) != len(set(data.executive_ids)):
@@ -62,6 +64,40 @@ def create_batch(db: Session, user: User, data: BatchCreateIn) -> ShipmentBatch:
                 to_address=address_snapshot(person),
                 weight_g=data.weight_g,
             )
+    db.commit()
+    return shipments_dao.get_batch(db, user.company_id, batch.id)
+
+
+def _create_asset_batch(db: Session, user: User, data: BatchCreateIn, lab: Lab) -> ShipmentBatch:
+    """An asset: one package from a saved sender to a lab. The courier picks it up from the sender."""
+    sender = people_dao.get(db, Sender, user.company_id, data.sender_id)
+    if not sender:
+        raise NotFound("Sender not found")
+    batch = shipments_dao.create_batch(
+        db,
+        company_id=user.company_id,
+        lab_id=lab.id,
+        created_by=user.id,
+        **data.model_dump(exclude={"lab_id", "dentist_ids", "executive_ids"}),
+        status=BatchStatus.DRAFT,
+        total_count=1,
+    )
+    shipments_dao.add_shipment(
+        db,
+        company_id=user.company_id,
+        batch_id=batch.id,
+        direction="FORWARD",
+        category=Category.ASSET,
+        sender_id=sender.id,
+        recipient_type=RecipientType.LAB,
+        lab_recipient_id=lab.id,
+        lab_id=lab.id,
+        client_ref=new_client_ref(),
+        status=ShipmentStatus.DRAFT,
+        from_address=address_snapshot(sender, company=sender.name),
+        to_address=address_snapshot(lab, company=lab.name),
+        weight_g=data.weight_g,
+    )
     db.commit()
     return shipments_dao.get_batch(db, user.company_id, batch.id)
 

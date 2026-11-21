@@ -1,6 +1,6 @@
 from app.models.base import Base
 from app.models.couriers import BarcodeRange, CourierApiKey, CourierProvider, RateCard
-from app.models.people import Dentist, Executive, Lab, RefreshToken, User
+from app.models.people import Dentist, Executive, Lab, RefreshToken, Sender, User
 from app.models.reference import City, Company, Pincode, Role, State
 from app.models.shipments import (
     ReturnPhoto,
@@ -22,6 +22,7 @@ __all__ = [
     "Dentist",
     "Executive",
     "Lab",
+    "Sender",
     "Pincode",
     "RateCard",
     "RefreshToken",

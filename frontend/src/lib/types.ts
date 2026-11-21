@@ -60,7 +60,7 @@ export interface Person {
   detail: string | null;
 }
 
-export type PersonKind = "dentists" | "executives" | "labs";
+export type PersonKind = "dentists" | "executives" | "labs" | "senders";
 
 export interface Courier {
   id: number;
@@ -72,6 +72,7 @@ export interface Courier {
 export interface Shipment {
   id: number;
   batch_id: number | null;
+  category?: "DENTAL" | "ASSET";
   direction: "FORWARD" | "RETURN";
   parent_shipment_id: number | null;
   recipient_type: "DENTIST" | "EXECUTIVE" | "LAB";
@@ -140,8 +141,11 @@ export interface ShipmentDetail extends Shipment {
 
 export interface Batch {
   id: number;
+  category?: "DENTAL" | "ASSET";
   lab_id: number;
   lab_name: string;
+  /** Assets: who is sending it (lab_name is then the receiving lab). */
+  sender_name?: string | null;
   weight_g: number;
   length_cm: number | null;
   breadth_cm: number | null;

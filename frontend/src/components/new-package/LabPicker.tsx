@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, MapPin, Phone, Plus, Search } from "lucide-react";
+import { Building2, Factory, MapPin, Phone, Plus, Search } from "lucide-react";
 import { useState } from "react";
 import { PersonForm } from "@/components/PersonForm";
 import { Button, Input, Skeleton } from "@/components/ui";
@@ -14,12 +14,22 @@ export interface PickedLab {
   address: string;
 }
 
-/** Search an existing lab or create a new one. */
-export function LabPicker({ value, onChange }: { value: PickedLab | null; onChange: (lab: PickedLab | null) => void }) {
+/** Search an existing lab (or sender) or create a new one. */
+export function LabPicker({
+  value,
+  onChange,
+  kind = "labs",
+}: {
+  value: PickedLab | null;
+  onChange: (lab: PickedLab | null) => void;
+  kind?: "labs" | "senders";
+}) {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
-  const labs = useApi<Page<Person>>(value ? null : "/labs", { q: query, limit: 6 });
+  const labs = useApi<Page<Person>>(value ? null : `/${kind}`, { q: query, limit: 6 });
+  const noun = kind === "senders" ? "sender" : "lab";
+  const Icon = kind === "senders" ? Factory : Building2;
 
   const pick = (l: Person): PickedLab => ({
     id: l.id,
@@ -33,7 +43,7 @@ export function LabPicker({ value, onChange }: { value: PickedLab | null; onChan
       <div className="flex items-center justify-between gap-3 rounded-xl border-2 border-brand-500 bg-brand-50/50 p-4">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-white">
-            <Building2 className="h-5 w-5" />
+            <Icon className="h-5 w-5" />
           </span>
           <div>
             <p className="font-semibold text-neutral-900">{value.name}</p>
@@ -53,7 +63,7 @@ export function LabPicker({ value, onChange }: { value: PickedLab | null; onChan
         <div className="relative min-w-[200px] flex-1" role="search">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
           <Input
-            placeholder="Search lab by name, phone or pincode…"
+            placeholder={`Search ${noun} by name, phone or pincode…`}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
@@ -65,11 +75,11 @@ export function LabPicker({ value, onChange }: { value: PickedLab | null; onChan
             onBlur={() => setQuery(q.trim())}
             enterKeyHint="search"
             className="pl-10"
-            aria-label="Search labs"
+            aria-label={`Search ${noun}s`}
           />
         </div>
         <Button type="button" variant="secondary" onClick={() => setAdding(true)}>
-          <Plus className="h-4 w-4" /> New lab
+          <Plus className="h-4 w-4" /> New {noun}
         </Button>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
@@ -84,7 +94,7 @@ export function LabPicker({ value, onChange }: { value: PickedLab | null; onChan
               className="flex items-start gap-3 rounded-xl border border-neutral-200 bg-white p-3.5 text-left transition hover:border-brand-300 hover:bg-brand-50/40 hover:shadow-card"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-neutral-500">
-                <Building2 className="h-4 w-4" />
+                <Icon className="h-4 w-4" />
               </span>
               <span className="min-w-0">
                 <span className="block truncate font-semibold text-neutral-900">{l.name}</span>
@@ -94,11 +104,11 @@ export function LabPicker({ value, onChange }: { value: PickedLab | null; onChan
           ))
         ) : (
           <p className="col-span-full rounded-xl border border-dashed border-neutral-300 px-4 py-6 text-center text-sm text-neutral-500">
-            No labs found. Add one with <strong>New lab</strong>.
+            No {noun}s found. Add one with <strong>New {noun}</strong>.
           </p>
         )}
       </div>
-      <PersonForm kind="labs" open={adding} onClose={() => setAdding(false)} onCreated={(l) => onChange(pick(l))} />
+      <PersonForm kind={kind} open={adding} onClose={() => setAdding(false)} onCreated={(l) => onChange(pick(l))} />
     </div>
   );
 }

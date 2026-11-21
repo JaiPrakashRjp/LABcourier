@@ -91,19 +91,21 @@ def start_direct_booking(db: Session, user: User, batch_id: int) -> ShipmentBatc
         raise AppError("No courier account is set up yet. Ask your admin to add the courier API key.")
 
     parcel = courier_service.parcel_for(batch, batch.weight_g)
-    from_pin = batch.lab.pincode
-    checked: dict[tuple[int, str], object] = {}  # one serviceability check per courier and pincode
+    checked: dict[tuple[int, str, str], object] = {}  # one serviceability check per courier and route
     for s in batch.shipments:
+        # The lab for dental lab work; the sender for assets.
+        from_pin = s.from_address["pincode"]
         to_pin = s.to_address["pincode"]
         chosen, reason = None, None
         for provider, key, adapter in accounts:
-            if (provider.id, to_pin) not in checked:
+            route = (provider.id, from_pin, to_pin)
+            if route not in checked:
                 try:
-                    checked[(provider.id, to_pin)] = adapter.quote(from_pin, to_pin, parcel)
+                    checked[route] = adapter.quote(from_pin, to_pin, parcel)
                 except Exception as exc:  # noqa: BLE001
-                    log.warning("Serviceability check failed for %s: %s", to_pin, exc)
-                    checked[(provider.id, to_pin)] = None
-            result = checked[(provider.id, to_pin)]
+                    log.warning("Serviceability check failed for %s -> %s: %s", from_pin, to_pin, exc)
+                    checked[route] = None
+            result = checked[route]
             if result is not None and result.serviceable:
                 chosen = (provider, key, result)
                 break

@@ -7,16 +7,18 @@ import { api, ApiError, errorMessage } from "@/lib/api";
 import type { Person, PersonKind, PincodeInfo } from "@/lib/types";
 import { Alert, Button, Field, Input, Modal, PhoneInput } from "./ui";
 
-const EDIT_TITLES: Record<PersonKind, string> = { dentists: "Edit dentist", executives: "Edit executive", labs: "Edit lab" };
+const EDIT_TITLES: Record<PersonKind, string> = { dentists: "Edit dentist", executives: "Edit executive", labs: "Edit lab", senders: "Edit sender" };
 const TITLES: Record<PersonKind, { title: string; description: string }> = {
   dentists: { title: "Add dentist", description: "They can sign up later with this phone number." },
   executives: { title: "Add executive", description: "They can sign up later with this phone number." },
   labs: { title: "Add lab", description: "Packages are picked up from this address." },
+  senders: { title: "Add sender", description: "Assets are picked up from this address and taken to a lab." },
 };
 const DETAIL: Record<PersonKind, { key: string; label: string; placeholder: string }> = {
   dentists: { key: "clinic_name", label: "Clinic name", placeholder: "Smile Dental Clinic" },
   executives: { key: "designation", label: "Designation", placeholder: "Sales executive" },
   labs: { key: "contact_person", label: "Contact person", placeholder: "Who to call at the lab" },
+  senders: { key: "contact_person", label: "Contact person", placeholder: "Who to call at the sender" },
 };
 
 const EMPTY = { name: "", detail: "", phone: "", email: "", address_line1: "", address_line2: "", pincode: "" };
@@ -31,12 +33,14 @@ function validateForm(kind: PersonKind, f: FormValues): Record<string, string> {
   const detailKey = DETAIL[kind].key;
   const detailLabel = DETAIL[kind].label;
   const name = tidy(f.name);
-  const nameLabel = kind === "labs" ? "Lab name" : "Name";
-  const nameMax = kind === "labs" ? 150 : 100;
+  // Labs and senders are often companies, so their names can hold digits and symbols.
+  const isOrg = kind === "labs" || kind === "senders";
+  const nameLabel = kind === "labs" ? "Lab name" : kind === "senders" ? "Sender name" : "Name";
+  const nameMax = isOrg ? 150 : 100;
   if (!name) e.name = `${nameLabel} is required`;
   else if (name.length < 2) e.name = `${nameLabel} must be at least 2 characters`;
   else if (name.length > nameMax) e.name = `${nameLabel} must be at most ${nameMax} characters`;
-  else if (kind !== "labs" && !NAME_RE.test(name)) e.name = `${nameLabel} must start with a letter and can't have special symbols`;
+  else if (!isOrg && !NAME_RE.test(name)) e.name = `${nameLabel} must start with a letter and can't have special symbols`;
 
   const detail = tidy(f.detail);
   const detailMax = kind === "dentists" ? 150 : 100;
@@ -176,7 +180,7 @@ export function PersonForm({
     <Modal open={open} title={editing ? EDIT_TITLES[kind] : TITLES[kind].title} description={TITLES[kind].description} onClose={onClose} wide>
       <form onSubmit={submit} className="space-y-5" noValidate>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={kind === "labs" ? "Lab name" : "Full name"} error={errors.name}>
+          <Field label={kind === "labs" ? "Lab name" : kind === "senders" ? "Sender or company name" : "Full name"} error={errors.name}>
             <Input value={form.name} onChange={set("name")} required minLength={2} autoFocus />
           </Field>
           <Field label={`${DETAIL[kind].label} (optional)`} error={errors[DETAIL[kind].key]}>

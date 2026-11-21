@@ -18,17 +18,21 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
 from app.models.couriers import CourierProvider
-from app.models.people import Dentist, Executive, Lab
+from app.models.people import Dentist, Executive, Lab, Sender
 
 
 class ShipmentBatch(Base, TimestampMixin):
-    """One "new package" request: a lab sending the same package to several recipients."""
+    """One "new package" request: a lab sending the same package to several recipients, or (assets) a
+    sender sending one package to a lab."""
 
     __tablename__ = "shipment_batches"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"), index=True, nullable=False)
+    category: Mapped[str] = mapped_column(String(10), default="DENTAL", server_default="DENTAL", nullable=False)
+    # Dental lab work: the sending lab. Assets: the lab receiving it.
     lab_id: Mapped[int] = mapped_column(ForeignKey("labs.id"), nullable=False)
+    sender_id: Mapped[int | None] = mapped_column(ForeignKey("senders.id"))
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     weight_g: Mapped[int] = mapped_column(Integer, nullable=False)
     length_cm: Mapped[float | None] = mapped_column(Numeric(6, 1))
@@ -45,6 +49,7 @@ class ShipmentBatch(Base, TimestampMixin):
     merged_label_path: Mapped[str | None] = mapped_column(String(300))
 
     lab: Mapped[Lab] = relationship(lazy="joined")
+    sender: Mapped[Sender | None] = relationship(lazy="joined")
     shipments: Mapped[list["Shipment"]] = relationship(back_populates="batch", order_by="Shipment.id")
 
 
@@ -60,12 +65,16 @@ class Shipment(Base, TimestampMixin):
         ),
         Index("ix_shipments_company_status_booked", "company_id", "status", "booked_at"),
         Index("ix_shipments_company_created", "company_id", "created_at"),
+        Index("ix_shipments_company_category", "company_id", "category"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"), nullable=False)
     batch_id: Mapped[int | None] = mapped_column(ForeignKey("shipment_batches.id"), index=True)
     direction: Mapped[str] = mapped_column(String(10), default="FORWARD", nullable=False)
+    category: Mapped[str] = mapped_column(String(10), default="DENTAL", server_default="DENTAL", nullable=False)
+    # Assets: who sent it (the package goes to lab_recipient_id).
+    sender_id: Mapped[int | None] = mapped_column(ForeignKey("senders.id"))
     parent_shipment_id: Mapped[int | None] = mapped_column(ForeignKey("shipments.id"), index=True)
     recipient_type: Mapped[str] = mapped_column(String(10), nullable=False)
     dentist_id: Mapped[int | None] = mapped_column(ForeignKey("dentists.id"), index=True)

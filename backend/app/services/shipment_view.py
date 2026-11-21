@@ -1,6 +1,6 @@
 """Turns shipment rows into the shapes the API returns."""
 
-from app.core.constants import Direction, Role, ShipmentStatus
+from app.core.constants import Category, Direction, Role, ShipmentStatus
 from app.models import ReturnRequest, Shipment, ShipmentBatch, User
 from app.schemas.packages import BatchOut, EventOut, ReturnOut, ShipmentDetailOut, ShipmentOut
 
@@ -13,11 +13,14 @@ def shipment_out(s: Shipment, user: User | None = None) -> ShipmentOut:
         user and user.role_id == Role.ADMIN and s.status in CANCELLABLE
         and s.provider and s.provider.supports_cancel
     )
-    can_return = bool(user and s.direction == Direction.FORWARD and s.status == ShipmentStatus.DELIVERED)
+    # Assets are one-way: no returns.
+    can_return = bool(user and s.direction == Direction.FORWARD and s.status == ShipmentStatus.DELIVERED
+                      and s.category != Category.ASSET)
     return ShipmentOut(
         id=s.id,
         batch_id=s.batch_id,
         direction=s.direction,
+        category=s.category,
         parent_shipment_id=s.parent_shipment_id,
         recipient_type=s.recipient_type,
         recipient_name=to.get("name", ""),
@@ -76,8 +79,10 @@ def shipment_detail(
 def batch_out(b: ShipmentBatch, user: User) -> BatchOut:
     return BatchOut(
         id=b.id,
+        category=b.category,
         lab_id=b.lab_id,
         lab_name=b.lab.name,
+        sender_name=b.sender.name if b.sender else None,
         weight_g=b.weight_g,
         length_cm=float(b.length_cm) if b.length_cm else None,
         breadth_cm=float(b.breadth_cm) if b.breadth_cm else None,

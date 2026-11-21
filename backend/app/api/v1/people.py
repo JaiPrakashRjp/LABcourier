@@ -1,11 +1,11 @@
-"""Dentists, executives and labs share the same endpoints shape."""
+"""Dentists, executives, labs and senders share the same endpoints shape."""
 
 from fastapi import APIRouter, Query
 
 from app.api.deps import DB, AdminUser
-from app.models import Dentist, Executive, Lab
+from app.models import Dentist, Executive, Lab, Sender
 from app.schemas.common import Page
-from app.schemas.people import DentistIn, ExecutiveIn, LabIn, PersonOut
+from app.schemas.people import DentistIn, ExecutiveIn, LabIn, PersonOut, SenderIn
 from app.services import people_service
 
 
@@ -49,3 +49,4 @@ def _router(prefix: str, model, payload):
 dentists = _router("dentists", Dentist, DentistIn)
 executives = _router("executives", Executive, ExecutiveIn)
 labs = _router("labs", Lab, LabIn)
+senders = _router("senders", Sender, SenderIn)

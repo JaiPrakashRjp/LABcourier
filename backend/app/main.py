@@ -154,6 +154,7 @@ for router in (
     people.dentists,
     people.executives,
     people.labs,
+    people.senders,
     packages.router,
     dashboard.router,
     webhooks.router,

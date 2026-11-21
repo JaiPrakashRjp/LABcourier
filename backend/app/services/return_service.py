@@ -30,6 +30,8 @@ def request_return(db: Session, user: User, shipment_id: int, data: ReturnIn,
     original = shipments_dao.get_shipment(db, user, shipment_id)
     if not original:
         raise NotFound("Package not found")
+    if original.category == "ASSET":
+        raise AppError("Assets can't be returned")
     if original.direction != Direction.FORWARD or original.status != ShipmentStatus.DELIVERED:
         raise AppError("A return can be requested only after the package is delivered")
     if user.role_id not in (Role.ADMIN, Role.DOCTOR, Role.EXECUTIVE):

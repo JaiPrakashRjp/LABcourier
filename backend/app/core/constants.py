@@ -17,6 +17,13 @@ class RecipientType(StrEnum):
     LAB = "LAB"
 
 
+class Category(StrEnum):
+    """What a package is: dental lab work (lab to dentists) or an asset (sender to a lab)."""
+
+    DENTAL = "DENTAL"
+    ASSET = "ASSET"
+
+
 class Direction(StrEnum):
     FORWARD = "FORWARD"
     RETURN = "RETURN"

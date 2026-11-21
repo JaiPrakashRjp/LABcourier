@@ -6,6 +6,9 @@ from app.core.constants import ReturnReason
 
 
 class BatchCreateIn(BaseModel):
+    # DENTAL: lab_id sends to dentist_ids/executive_ids. ASSET: sender_id sends one package to lab_id.
+    category: str = Field(default="DENTAL", pattern="^(DENTAL|ASSET)$")
+    sender_id: int | None = None
     lab_id: int
     dentist_ids: list[int] = Field(default_factory=list)
     executive_ids: list[int] = Field(default_factory=list)
@@ -22,8 +25,14 @@ class BatchCreateIn(BaseModel):
 
     @model_validator(mode="after")
     def check(self):
-        if not self.dentist_ids and not self.executive_ids:
-            raise ValueError("Select at least one dentist or executive")
+        if self.category == "ASSET":
+            if not self.sender_id:
+                raise ValueError("Choose who is sending the asset")
+            self.dentist_ids, self.executive_ids = [], []
+        else:
+            self.sender_id = None
+            if not self.dentist_ids and not self.executive_ids:
+                raise ValueError("Select at least one dentist or executive")
         self.payment_mode, self.cod_amount = "PREPAID", 0
         return self
 
@@ -84,6 +93,7 @@ class ShipmentOut(BaseModel):
     id: int
     batch_id: int | None
     direction: str
+    category: str = "DENTAL"
     parent_shipment_id: int | None
     recipient_type: str
     recipient_name: str
@@ -132,8 +142,10 @@ class ShipmentDetailOut(ShipmentOut):
 
 class BatchOut(BaseModel):
     id: int
+    category: str = "DENTAL"
     lab_id: int
     lab_name: str
+    sender_name: str | None = None
     weight_g: int
     length_cm: float | None
     breadth_cm: float | None
@@ -154,7 +166,9 @@ class BatchOut(BaseModel):
 class DraftOut(BaseModel):
     """A package request that was saved but not booked."""
     id: int
+    category: str = "DENTAL"
     lab_name: str
+    sender_name: str | None = None
     contents: str
     weight_g: int
     status: str

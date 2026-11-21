@@ -46,7 +46,19 @@ STATUS_MAP = {
     "assigned_for_pickup": S.BOOKED,
     "ofp": S.BOOKED,
     "out_for_pickup": S.BOOKED,
+    # Pickup not done yet (delayed, not reachable, not attempted, on hold): still waiting at the sender.
+    "assigned_for_seller_pickup": S.BOOKED,
+    "seller_initiated_delay": S.BOOKED,
+    "seller_not_contactable": S.BOOKED,
+    "pickup_not_attempted": S.BOOKED,
+    "pickup_on_hold": S.BOOKED,
     "picked": S.PICKED_UP,
+    "received_from_client_warehouse": S.PICKED_UP,
+    "pending_inscan": S.IN_TRANSIT,
+    "recd_at_fwd_dc": S.IN_TRANSIT,
+    "ewb_on_hold": S.IN_TRANSIT,
+    "pincode_updated": S.IN_TRANSIT,
+    "partially_delivered": S.DELIVERED,
     "recd_at_fwd_hub": S.IN_TRANSIT,
     "received_at_forward_hub": S.IN_TRANSIT,
     "recd_at_rev_hub": S.IN_TRANSIT,
@@ -408,5 +420,8 @@ class ShadowfaxAdapter(CourierAdapter):
                 location=row.get("current_location"),
                 event_at=when,
                 raw=row,
+                # Only filled when the webhook template includes {estimatedDeliveryDate}.
+                expected_date=parse_date(row.get("estimated_delivery_date") or row.get("estimatedDeliveryDate")
+                                         or row.get("promised_delivery_date") or row.get("edd")),
             )))
         return parsed

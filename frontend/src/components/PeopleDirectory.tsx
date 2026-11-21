@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, MapPin, Pencil, Phone, Plus, Search, Stethoscope, Trash2, Users } from "lucide-react";
+import { Building2, Factory, MapPin, Pencil, Phone, Plus, Search, Stethoscope, Trash2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api, errorMessage } from "@/lib/api";
@@ -15,6 +15,7 @@ const LABELS: Record<PersonKind, { title: string; subtitle: string; add: string;
   dentists: { title: "Dentists", subtitle: "Doctors who receive packages from your labs.", add: "Add dentist", detail: "Clinic", icon: Stethoscope },
   executives: { title: "Executives", subtitle: "Executives who receive packages.", add: "Add executive", detail: "Designation", icon: Users },
   labs: { title: "Labs", subtitle: "Labs that send packages.", add: "Add lab", detail: "Contact person", icon: Building2 },
+  senders: { title: "Senders", subtitle: "People and companies who send assets to your labs.", add: "Add sender", detail: "Contact person", icon: Factory },
 };
 
 /** Search by name, phone, address or pincode, with state and city filters kept in the URL. */

@@ -48,13 +48,14 @@ UNBOOKED = [BatchStatus.DRAFT, BatchStatus.QUOTED]
 
 
 @router.get("/batches/drafts", response_model=list[DraftOut])
-def drafts(user: AdminUser, db: DB):
+def drafts(user: AdminUser, db: DB, category: str | None = Query(default=None, pattern="^(DENTAL|ASSET)$")):
     """Package requests saved but not booked, so they can be continued or deleted."""
     return [
-        DraftOut(id=b.id, lab_name=b.lab.name, contents=b.contents, weight_g=b.weight_g, status=b.status,
+        DraftOut(id=b.id, category=b.category, lab_name=b.lab.name, sender_name=b.sender.name if b.sender else None,
+                 contents=b.contents, weight_g=b.weight_g, status=b.status,
                  total_count=b.total_count, recipients=[s.to_address["name"] for s in b.shipments],
                  created_at=b.created_at)
-        for b in shipments_dao.unbooked_batches(db, user.company_id, UNBOOKED)
+        for b in shipments_dao.unbooked_batches(db, user.company_id, UNBOOKED, category)
     ]
 
 
@@ -130,26 +131,28 @@ def batch_labels(batch_id: int, user: AdminUser, db: DB):
 MAX_LABEL_DAYS = 31
 
 
-def _labels_in_range(db, user, date_from: date, date_to: date):
+def _labels_in_range(db, user, date_from: date, date_to: date, category: str | None = None):
     if date_to < date_from:
         raise AppError("The end date must be on or after the start date")
     if (date_to - date_from).days >= MAX_LABEL_DAYS:
         raise AppError(f"Choose up to {MAX_LABEL_DAYS} days at a time")
     start = datetime.combine(date_from, datetime.min.time(), IST)
     end = datetime.combine(date_to + timedelta(days=1), datetime.min.time(), IST)
-    return shipments_dao.labels_booked_between(db, user.company_id, start, end)
+    return shipments_dao.labels_booked_between(db, user.company_id, start, end, category)
 
 
 @router.get("/labels/summary")
-def labels_summary(user: AdminUser, db: DB, date_from: date, date_to: date) -> dict:
+def labels_summary(user: AdminUser, db: DB, date_from: date, date_to: date,
+                   category: str | None = Query(default=None, pattern="^(DENTAL|ASSET)$")) -> dict:
     """How many labels a date range has, so the screen can say so before downloading."""
-    return {"count": len(_labels_in_range(db, user, date_from, date_to))}
+    return {"count": len(_labels_in_range(db, user, date_from, date_to, category))}
 
 
 @router.get("/labels.pdf")
-def labels_for_dates(user: AdminUser, db: DB, date_from: date, date_to: date):
+def labels_for_dates(user: AdminUser, db: DB, date_from: date, date_to: date,
+                     category: str | None = Query(default=None, pattern="^(DENTAL|ASSET)$")):
     """Every label for packages booked in the range, in one PDF, oldest first."""
-    shipments = _labels_in_range(db, user, date_from, date_to)
+    shipments = _labels_in_range(db, user, date_from, date_to, category)
     if not shipments:
         raise NotFound("No labels for packages booked on these dates")
     pdf = label_service.merge_files([s.label_path for s in shipments])
@@ -164,6 +167,7 @@ def list_shipments(
     user: CurrentUser,
     db: DB,
     status: Annotated[list[str] | None, Query()] = None,
+    category: str | None = Query(default=None, pattern="^(DENTAL|ASSET)$"),
     provider_id: int | None = None,
     lab_id: int | None = None,
     batch_id: int | None = None,
@@ -179,7 +183,7 @@ def list_shipments(
     limit: int = Query(default=25, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ):
-    filters = ShipmentFilters(status=status, provider_id=provider_id, lab_id=lab_id, batch_id=batch_id,
+    filters = ShipmentFilters(status=status, category=category, provider_id=provider_id, lab_id=lab_id, batch_id=batch_id,
                               recipient_type=recipient_type, direction=direction, state_id=state_id,
                               city_id=city_id, pincode=pincode, q=q, date_from=date_from, date_to=date_to)
     rows, total = shipments_dao.list_shipments(db, user, filters, sort, limit, offset)

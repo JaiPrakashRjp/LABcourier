@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowUpRight, PackagePlus, PackageSearch, Search, SlidersHorizontal, Undo2, X } from "lucide-react";
+import { ArrowUpRight, FilterX, PackagePlus, PackageSearch, Search, SlidersHorizontal, Undo2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Alert,
@@ -21,8 +22,10 @@ import {
 } from "@/components/ui";
 import { DraftsPanel } from "@/components/DraftsPanel";
 import { LabelsDownload } from "@/components/LabelsDownload";
+import { StatusFilter } from "@/components/StatusFilter";
 import { useAuth } from "@/lib/auth";
-import { STATUS_FILL, STATUS_LABELS, STATUS_ORDER, dateOnly } from "@/lib/format";
+import { CATEGORY_LABELS, useCategory } from "@/lib/category";
+import { STATUS_ORDER, dateOnly } from "@/lib/format";
 import { ROLES, type City, type Courier, type Page, type Person, type Shipment, type State } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 import { useUrlState } from "@/lib/useUrlState";
@@ -32,7 +35,11 @@ const FILTER_KEYS = ["status", "courier", "direction", "type", "state", "city", 
 
 export default function PackagesPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const isAdmin = user?.role_id === ROLES.ADMIN;
+  // Admins switch between Dental Lab Work and Assets in the side menu; others only have their own packages.
+  const { category } = useCategory();
+  const shownCategory = isAdmin ? category : undefined;
   const { values, getAll, update } = useUrlState();
   const statuses = getAll("status");
   const offset = Number(values.offset ?? 0);
@@ -45,6 +52,7 @@ export default function PackagesPage() {
   const set = (changes: Record<string, string | string[] | null>) => update({ ...changes, offset: null });
 
   const { data, error, loading } = useApi<Page<Shipment>>("/shipments", {
+    category: shownCategory,
     status: statuses,
     provider_id: values.courier,
     direction: values.direction,
@@ -70,24 +78,28 @@ export default function PackagesPage() {
   const panelCount = panelKeys.filter((k) => values[k]).length;
   const activeCount = FILTER_KEYS.filter((k) => (k === "status" ? statuses.length : values[k])).length;
 
-  const toggleStatus = (s: string) => set({ status: statuses.includes(s) ? statuses.filter((x) => x !== s) : [...statuses, s] });
 
   return (
     <div>
       <PageHeader
         title="Packages"
-        subtitle={isAdmin ? "Every package and return in one place." : "Packages sent to you, and their returns."}
+        subtitle={
+          !isAdmin ? "Packages sent to you, and their returns."
+          : category === "ASSET" ? "Assets sent from senders to your labs."
+          : "Dental lab work sent to dentists and executives, and their returns."
+        }
+        eyebrow={isAdmin && <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">{CATEGORY_LABELS[category]}</span>}
         actions={
           isAdmin && (
             <>
-              <LabelsDownload />
+              <LabelsDownload category={category} />
               <LinkButton href="/packages/new"><PackagePlus className="h-4 w-4" /> New package</LinkButton>
             </>
           )
         }
       />
 
-      {isAdmin && <DraftsPanel />}
+      {isAdmin && <DraftsPanel category={category} />}
 
       <Card className="mb-5 space-y-4 p-4 sm:p-5">
         <div className="flex flex-wrap gap-2">
@@ -103,7 +115,13 @@ export default function PackagesPage() {
               aria-label="Search packages"
             />
           </form>
-          {/* On phones, sort and filters share one row. */}
+          {/* On phones, status, sort and filters share one row. */}
+          <StatusFilter
+            // Assets are one-way, so return statuses don't apply to them.
+            options={STATUS_ORDER.filter((st) => st !== "DRAFT" && !(shownCategory === "ASSET" && (st === "RETURN_REQUESTED" || st === "RETURNED")))}
+            selected={statuses}
+            onChange={(next) => set({ status: next })}
+          />
           <Select className="min-w-0 flex-1 sm:w-44 sm:flex-none" value={values.sort ?? "newest"} onChange={(e) => update({ sort: e.target.value === "newest" ? null : e.target.value })} aria-label="Sort">
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
@@ -114,31 +132,16 @@ export default function PackagesPage() {
             {panelCount > 0 && <span className="rounded-full bg-white/25 px-1.5 text-xs">{panelCount}</span>}
           </Button>
           {activeCount > 0 && (
-            <Button variant="ghost" onClick={() => set(Object.fromEntries(FILTER_KEYS.map((k) => [k, null])))}>
-              <X className="h-4 w-4" /> Clear
+            <Button
+              variant="secondary"
+              onClick={() => set(Object.fromEntries(FILTER_KEYS.map((k) => [k, null])))}
+              className="w-11 flex-none border-rose-200 px-0 text-rose-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 sm:w-10"
+              aria-label="Clear all filters"
+              title="Clear all filters"
+            >
+              <FilterX className="h-[18px] w-[18px]" />
             </Button>
           )}
-        </div>
-
-        {/* One swipeable row on phones; wraps on larger screens. */}
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
-          {STATUS_ORDER.filter((s) => s !== "DRAFT").map((s) => {
-            const on = statuses.includes(s);
-            return (
-              <button
-                key={s}
-                onClick={() => toggleStatus(s)}
-                aria-pressed={on}
-                className={cx(
-                  "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-2 text-xs font-semibold transition-colors duration-100 sm:py-1.5",
-                  on ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:text-neutral-900",
-                )}
-              >
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: STATUS_FILL[s] }} />
-                {STATUS_LABELS[s]}
-              </button>
-            );
-          })}
         </div>
 
         {(showFilters || panelCount > 0) && (
@@ -223,7 +226,16 @@ export default function PackagesPage() {
               </thead>
               <tbody>
                 {data.items.map((s) => (
-                  <tr key={s.id} className={cx(table.row, "group cursor-pointer")}>
+                  <tr
+                    key={s.id}
+                    className={cx(table.row, "group cursor-pointer")}
+                    // The whole row opens the package; links inside still work on their own.
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest("a, button")) return;
+                      if (window.getSelection()?.toString()) return; // let people copy text
+                      router.push(`/packages/${s.id}`);
+                    }}
+                  >
                     <td className={table.td}>
                       <Link href={`/packages/${s.id}`} className="flex items-center gap-3">
                         <Avatar name={s.recipient_name} />
@@ -231,7 +243,7 @@ export default function PackagesPage() {
                           <span className="block font-semibold text-neutral-900 group-hover:text-brand-700">{s.recipient_name}</span>
                           <span className="flex items-center gap-1 text-xs text-neutral-500">
                             {s.direction === "RETURN" && <Undo2 className="h-3 w-3 text-pink-500" />}
-                            {s.direction === "RETURN" ? "Return to lab" : s.recipient_type === "DENTIST" ? "Dentist" : "Executive"} · {s.to_city} {s.to_pincode}
+                            {s.direction === "RETURN" ? "Return to lab" : s.recipient_type === "DENTIST" ? "Dentist" : s.recipient_type === "LAB" ? "Lab" : "Executive"} · {s.to_city} {s.to_pincode}
                           </span>
                         </span>
                       </Link>
