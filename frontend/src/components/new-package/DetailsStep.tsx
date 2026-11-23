@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, ArrowRight, Box, Building2, Stethoscope, Users, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Avatar, Button, Card, Field, Input, SectionTitle, cx } from "@/components/ui";
 import { toast } from "sonner";
 import { api, errorMessage } from "@/lib/api";
@@ -190,6 +190,7 @@ export function DetailsStep({
 }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   const set = (key: keyof Draft) => (e: React.ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, [key]: e.target.value });
   const remove = (kind: keyof Selection, id: number) => {
     const next = { ...draft.recipients[kind] };
@@ -208,6 +209,9 @@ export function DetailsStep({
   }
 
   async function save() {
+    // A fast double-tap must not create two orders: ignore taps while one is running.
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError("");
     try {
@@ -236,6 +240,7 @@ export function DetailsStep({
     } catch (err) {
       setError(errorMessage(err));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }

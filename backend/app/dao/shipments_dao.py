@@ -146,6 +146,17 @@ def get_batch(db: Session, company_id: int, batch_id: int, lock: bool = False) -
     return db.scalars(stmt).unique().first()
 
 
+def recent_batches(db: Session, company_id: int, user_id: int, since: datetime) -> list[ShipmentBatch]:
+    """Package requests this person created since a moment ago (used to catch double submissions)."""
+    return list(db.scalars(
+        select(ShipmentBatch)
+        .where(ShipmentBatch.company_id == company_id, ShipmentBatch.created_by == user_id,
+               ShipmentBatch.created_at >= since)
+        .options(selectinload(ShipmentBatch.shipments))
+        .order_by(ShipmentBatch.id.desc())
+    ).unique())
+
+
 def unbooked_batches(db: Session, company_id: int, statuses: list[str],
                      category: str | None = None) -> list[ShipmentBatch]:
     """Package requests saved but not booked yet, newest first."""

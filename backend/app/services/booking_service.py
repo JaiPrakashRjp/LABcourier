@@ -66,19 +66,8 @@ def start_booking(db: Session, user: User, batch_id: int, data: BookIn) -> Shipm
     return batch
 
 
-def start_direct_booking(db: Session, user: User, batch_id: int) -> ShipmentBatch:
-    """Books straight away, with no price step (the labs are postpaid with one courier).
-
-    Each package goes to the first courier that has an API key and delivers to its pincode. No price is
-    needed or stored: the courier bills the lab's postpaid account.
-    """
-    batch = shipments_dao.get_batch(db, user.company_id, batch_id, lock=True)
-    if not batch:
-        raise NotFound("Package request not found")
-    if batch.status not in (BatchStatus.DRAFT, BatchStatus.QUOTED):
-        raise AppError("This package request is already booked")
-
-    # Couriers this company can book with, in order.
+def _courier_accounts(db: Session, user: User) -> list:
+    """Couriers this company can book with, in order: (provider, key, adapter)."""
     accounts = []
     for provider in couriers_dao.active_providers(db):
         key = couriers_dao.default_api_key(db, user.company_id, provider.id)
@@ -89,10 +78,15 @@ def start_direct_booking(db: Session, user: User, batch_id: int) -> ShipmentBatc
                 log.warning("Courier %s is not usable: %s", provider.code, exc)
     if not accounts:
         raise AppError("No courier account is set up yet. Ask your admin to add the courier API key.")
+    return accounts
 
+
+def _assign_couriers(db: Session, user: User, batch: ShipmentBatch, shipments: list[Shipment]) -> None:
+    """Give each package the first courier that delivers to its pincode, or mark it failed with the reason."""
+    accounts = _courier_accounts(db, user)
     parcel = courier_service.parcel_for(batch, batch.weight_g)
     checked: dict[tuple[int, str, str], object] = {}  # one serviceability check per courier and route
-    for s in batch.shipments:
+    for s in shipments:
         # The lab for dental lab work; the sender for assets.
         from_pin = s.from_address["pincode"]
         to_pin = s.to_address["pincode"]
@@ -112,8 +106,8 @@ def start_direct_booking(db: Session, user: User, batch_id: int) -> ShipmentBatc
             reason = getattr(result, "message", None)
         if not chosen:
             s.status = ShipmentStatus.BOOKING_FAILED
-            s.booking_error = f"Delivery isn't available to pincode {to_pin} yet" if not reason or "available" in reason \
-                else reason
+            # The courier's own reason (e.g. which pincode it can't serve), or a plain fallback.
+            s.booking_error = reason or f"Delivery isn't available to pincode {to_pin} yet"
             continue
         provider, key, result = chosen
         s.provider_id = provider.id
@@ -124,6 +118,19 @@ def start_direct_booking(db: Session, user: User, batch_id: int) -> ShipmentBatc
         s.status = ShipmentStatus.BOOKING
         s.booking_error = None
 
+
+def start_direct_booking(db: Session, user: User, batch_id: int) -> ShipmentBatch:
+    """Books straight away, with no price step (the labs are postpaid with one courier).
+
+    Each package goes to the first courier that has an API key and delivers to its pincode. No price is
+    needed or stored: the courier bills the lab's postpaid account.
+    """
+    batch = shipments_dao.get_batch(db, user.company_id, batch_id, lock=True)
+    if not batch:
+        raise NotFound("Package request not found")
+    if batch.status not in (BatchStatus.DRAFT, BatchStatus.QUOTED):
+        raise AppError("This package request is already booked")
+    _assign_couriers(db, user, batch, list(batch.shipments))
     batch.status = BatchStatus.BOOKING
     _update_counts(batch)
     db.commit()
@@ -131,15 +138,21 @@ def start_direct_booking(db: Session, user: User, batch_id: int) -> ShipmentBatc
 
 
 def retry_failed(db: Session, user: User, batch_id: int) -> ShipmentBatch:
+    """Try the failed packages again. Ones that never reached a courier (e.g. refused at the pincode check)
+    are checked again first, so a fix on our side or the courier's lets them through without a new order."""
     batch = shipments_dao.get_batch(db, user.company_id, batch_id, lock=True)
     if not batch:
         raise NotFound("Package request not found")
-    retry = [s for s in batch.shipments if s.status == ShipmentStatus.BOOKING_FAILED and s.provider_id]
-    if not retry:
+    failed = [s for s in batch.shipments if s.status == ShipmentStatus.BOOKING_FAILED and not s.tracking_number]
+    if not failed:
         raise AppError("There are no failed packages that can be retried")
-    for s in retry:
+    with_courier = [s for s in failed if s.provider_id]
+    for s in with_courier:
         s.status = ShipmentStatus.BOOKING
         s.booking_error = None
+    without_courier = [s for s in failed if not s.provider_id]
+    if without_courier:
+        _assign_couriers(db, user, batch, without_courier)
     batch.status = BatchStatus.BOOKING
     _update_counts(batch)
     db.commit()

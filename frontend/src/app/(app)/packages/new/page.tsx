@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, BadgeIndianRupee, Check, ClipboardCheck, PackageCheck, PenLine } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Button, Card, FullPageSpinner, PageHeader, cx } from "@/components/ui";
 import { AssetStep } from "@/components/new-package/AssetStep";
 import { DetailsStep, useDraft } from "@/components/new-package/DetailsStep";
@@ -150,7 +150,11 @@ export default function NewPackagePage() {
 function BookNow({ batch, onBooked }: { batch: Batch; onBooked: (b: Batch) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const inFlight = useRef(false);
   async function book() {
+    // A fast double-tap must not create two orders: ignore taps while one is running.
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError("");
     try {
@@ -158,6 +162,7 @@ function BookNow({ batch, onBooked }: { batch: Batch; onBooked: (b: Batch) => vo
     } catch (err) {
       setError(errorMessage(err));
       setBusy(false);
+      inFlight.current = false;
     }
   }
   return (

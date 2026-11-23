@@ -26,6 +26,8 @@ import { Alert, Avatar, Button, Card, Field, FullPageSpinner, Modal, StatusBadge
 import { api, errorMessage, openFile } from "@/lib/api";
 import { STATUS_FILL, STATUS_LABELS, dateOnly, dateTime } from "@/lib/format";
 import type { Address, ShipmentDetail } from "@/lib/types";
+import { useAuth } from "@/lib/auth";
+import { ROLES } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 
 const REASONS = [
@@ -46,6 +48,7 @@ export default function PackageDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data, error, loading, reload, setData } = useApi<ShipmentDetail>(`/shipments/${id}`);
   const [busy, setBusy] = useState("");
+  const isAdmin = useAuth().user?.role_id === ROLES.ADMIN;
   const [returning, setReturning] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
@@ -115,6 +118,20 @@ export default function PackageDetailPage() {
             {s.has_label && (
               <Button variant="secondary" loading={busy === "label"} onClick={() => run("label", () => openFile(`/shipments/${id}/label.pdf`))}>
                 <FileDown className="h-4 w-4" /> Label
+              </Button>
+            )}
+            {isAdmin && s.status === "BOOKING_FAILED" && s.batch_id && (
+              <Button
+                loading={busy === "retry"}
+                onClick={() =>
+                  run("retry", async () => {
+                    await api(`/batches/${s.batch_id}/retry`, { method: "POST" });
+                    // Booking runs in the background; check back for the result.
+                    setTimeout(() => void reload(), 4000);
+                  }, "Trying the booking again…")
+                }
+              >
+                <RefreshCw className="h-4 w-4" /> Retry booking
               </Button>
             )}
             {s.can_cancel && (

@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, ArrowRight, Box, Building2, Factory } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Alert, Button, Card, Field, Input, SectionTitle } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
@@ -64,6 +64,7 @@ export function AssetStep({
   const [draft, setDraft] = useState<AssetDraft>(EMPTY);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   const set = (key: keyof AssetDraft) => (e: React.ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, [key]: e.target.value });
   const dims = draft.length_cm ? `${draft.length_cm} × ${draft.breadth_cm || "—"} × ${draft.height_cm || "—"} cm` : "Not given";
 
@@ -78,6 +79,9 @@ export function AssetStep({
   }
 
   async function book() {
+    // A fast double-tap must not create two orders: ignore taps while one is running.
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError("");
     try {
@@ -105,6 +109,7 @@ export function AssetStep({
     } catch (err) {
       setError(errorMessage(err));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }

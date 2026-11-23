@@ -5,7 +5,8 @@ credentials:
   extra_config:
     base_url                overrides the staging / production host
     service                 serviceability "service" parameter, default "customer_delivery"
-    tier                    tier that must be listed for both pincodes, default "Regular"
+    tier                    preferred service (default "Regular"); if the delivery pincode doesn't offer it, the next
+                            one it does offer is used, in the order of TIER_FALLBACK
     order_type              "marketplace" (default) or "warehouse"
     hsn_code                HSN code sent on each product line
     category                product category, default "Dental"
@@ -37,6 +38,8 @@ log = logging.getLogger(__name__)
 
 BASE_URLS = {"UAT": "https://dale.staging.shadowfax.in/api", "PROD": "https://dale.shadowfax.in/api"}
 BATCH = 50  # most AWBs per bulk tracking call
+# Shadowfax offers different services per pincode (e.g. some only "Surface" and "Large").
+TIER_FALLBACK = ["Regular", "Surface", "Large"]
 
 S = ShipmentStatus
 
@@ -201,21 +204,33 @@ class ShadowfaxAdapter(CourierAdapter):
     # ---- Quote ----
 
     def quote(self, sender_pincode: str, receiver_pincode: str, parcel: Parcel) -> QuoteResult:
+        """Can Shadowfax deliver here, and with which service? Refuses only when it is sure.
+
+        Shadowfax offers different services per pincode (seen: Regular, Surface, Large in any mix). The preferred one
+        is used when the delivery pincode offers it, otherwise the next in TIER_FALLBACK, otherwise whatever is
+        offered. Only the delivery pincode decides: pickup is checked by Shadowfax itself when booking.
+        """
         cfg = self.credentials.extra_config
-        tier = cfg.get("tier", "Regular")
+        preferred = cfg.get("tier", "Regular")
         try:
             body = self._request(
                 "GET", "/v1/clients/serviceability/",
                 params={"service": cfg.get("service", "customer_delivery"), "pincodes": f"{sender_pincode},{receiver_pincode}"},
             )
         except CourierError as exc:
-            return QuoteResult(serviceable=False, message=str(exc))
+            # A failed check must not block the booking; Shadowfax's booking answer is the final word.
+            log.warning("Serviceability check failed (%s -> %s): %s", sender_pincode, receiver_pincode, exc)
+            return QuoteResult(serviceable=True, service_type=preferred, message=f"Pincode check skipped: {exc}")
         rows = body if isinstance(body, list) else (body.get("data") or body.get("results") or [])
-        tiers = {str(r.get("code")): {s.lower() for s in r.get("services") or []} for r in rows}
-        missing = [p for p in (sender_pincode, receiver_pincode) if tier.lower() not in tiers.get(p, set())]
-        if missing:
-            return QuoteResult(serviceable=False, message=f"Delivery isn't available to pincode {', '.join(missing)} yet",
+        services = {str(r.get("code")): list(r.get("services") or []) for r in rows if isinstance(r, dict)}
+        offered = {s.lower(): s for s in services.get(receiver_pincode, [])}
+        if not offered:
+            return QuoteResult(serviceable=False, message=f"Delivery isn't available to pincode {receiver_pincode} yet",
                                raw={"rows": rows})
+        order = [preferred] + [t for t in TIER_FALLBACK if t.lower() != preferred.lower()]
+        tier = next((offered[t.lower()] for t in order if t.lower() in offered), None)
+        # A service name we don't know yet: use what the pincode offers rather than refusing.
+        tier = tier or next(iter(offered.values()))
         return QuoteResult(serviceable=True, service_type=tier, raw={"rows": rows})
 
     # ---- Forward booking ----

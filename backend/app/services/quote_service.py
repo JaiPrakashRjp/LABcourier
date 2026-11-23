@@ -1,7 +1,9 @@
 import logging
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.constants import BatchStatus, Category, RecipientType, ShipmentStatus
@@ -26,7 +28,32 @@ def new_client_ref() -> str:
     return "LD" + uuid.uuid4().hex[:14].upper()
 
 
+# The same package sent twice this quickly is a double tap, not a second order.
+DUPLICATE_WINDOW = timedelta(seconds=30)
+
+
+def _recent_duplicate(db: Session, user: User, data: BatchCreateIn) -> ShipmentBatch | None:
+    since = datetime.now(UTC) - DUPLICATE_WINDOW
+    for b in shipments_dao.recent_batches(db, user.company_id, user.id, since):
+        if (b.category, b.lab_id, b.sender_id, b.contents, b.weight_g) != (
+            data.category, data.lab_id, data.sender_id, data.contents, data.weight_g
+        ):
+            continue
+        dentists = {s.dentist_id for s in b.shipments if s.dentist_id}
+        executives = {s.executive_id for s in b.shipments if s.executive_id}
+        if dentists == set(data.dentist_ids) and executives == set(data.executive_ids):
+            return b
+    return None
+
+
 def create_batch(db: Session, user: User, data: BatchCreateIn) -> ShipmentBatch:
+    # One request at a time per person, so two quick taps can't both slip past the duplicate check.
+    db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": 7_100_000 + user.id})
+    existing = _recent_duplicate(db, user, data)
+    if existing:
+        log.info("Ignored a duplicate package request from user %s (batch %s)", user.id, existing.id)
+        db.commit()
+        return shipments_dao.get_batch(db, user.company_id, existing.id)
     lab = people_dao.get(db, Lab, user.company_id, data.lab_id)
     if not lab:
         raise NotFound("Lab not found")
