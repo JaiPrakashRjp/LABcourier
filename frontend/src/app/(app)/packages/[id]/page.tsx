@@ -173,6 +173,14 @@ export default function PackageDetailPage() {
               })}
             </ol>
           )}
+          {/* Phones have no room for the step names above, so name the current and next step here. */}
+          {!offTrack && step >= 0 && (
+            <p className="mt-3 text-sm sm:hidden">
+              <span className="font-semibold text-neutral-900">{STATUS_LABELS[JOURNEY[step]]}</span>
+              <span className="text-neutral-500"> · Step {step + 1} of {JOURNEY.length}</span>
+              {step < JOURNEY.length - 1 && <span className="block text-xs text-neutral-500">Next: {STATUS_LABELS[JOURNEY[step + 1]]}</span>}
+            </p>
+          )}
         </div>
       </Card>
 

@@ -40,6 +40,9 @@ BASE_URLS = {"UAT": "https://dale.staging.shadowfax.in/api", "PROD": "https://da
 BATCH = 50  # most AWBs per bulk tracking call
 # Shadowfax offers different services per pincode (e.g. some only "Surface" and "Large").
 TIER_FALLBACK = ["Regular", "Surface", "Large"]
+# Delivery pincodes we never book with Shadowfax, even when its check says yes. More can be added per account in
+# extra_config "blocked_pincodes".
+BLOCKED_PINCODES = {"411060"}
 
 S = ShipmentStatus
 
@@ -232,6 +235,8 @@ class ShadowfaxAdapter(CourierAdapter):
         """
         cfg = self.credentials.extra_config
         preferred = cfg.get("tier", "Regular")
+        if receiver_pincode in BLOCKED_PINCODES | {str(p) for p in cfg.get("blocked_pincodes") or []}:
+            return QuoteResult(serviceable=False, message=f"Delivery isn't available to pincode {receiver_pincode} yet")
         try:
             body = self._request(
                 "GET", "/v1/clients/serviceability/",
