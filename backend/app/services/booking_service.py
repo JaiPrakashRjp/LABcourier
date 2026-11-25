@@ -6,6 +6,7 @@ background, books each courier's packages in batches, and saves tracking numbers
 
 import hashlib
 import logging
+import time
 from collections import defaultdict
 from datetime import UTC, datetime
 
@@ -79,6 +80,37 @@ def _courier_accounts(db: Session, user: User) -> list:
     if not accounts:
         raise AppError("No courier account is set up yet. Ask your admin to add the courier API key.")
     return accounts
+
+
+_DELIVERY_CACHE_SECONDS = 600
+_delivery_cache: dict[tuple[int, str], tuple[float, tuple[bool, str | None]]] = {}
+
+
+def check_delivery_pincode(db: Session, user: User, pincode: str) -> tuple[bool, str | None]:
+    """Can the company's courier deliver to this pincode? Answers (ok, reason) for the address forms and pickers.
+
+    The courier only looks at the delivery pincode, so any valid pickup pincode will do. A courier that can't be
+    reached counts as OK: the booking itself is the final check. Answers are kept for a few minutes.
+    """
+    now = time.monotonic()
+    hit = _delivery_cache.get((user.company_id, pincode))
+    if hit and now - hit[0] < _DELIVERY_CACHE_SECONDS:
+        return hit[1]
+    reason = None
+    for _provider, _key, adapter in _courier_accounts(db, user):
+        try:
+            result = adapter.quote("110001", pincode, None)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Delivery check failed for %s: %s", pincode, exc)
+            result = None
+        if result is None or result.serviceable:
+            answer = (True, None)
+            break
+        reason = result.message
+    else:
+        answer = (False, reason or f"Delivery isn't available to pincode {pincode} yet")
+    _delivery_cache[(user.company_id, pincode)] = (now, answer)
+    return answer
 
 
 def _assign_couriers(db: Session, user: User, batch: ShipmentBatch, shipments: list[Shipment]) -> None:

@@ -1,11 +1,12 @@
 "use client";
 
-import { Plus, Search, Stethoscope, Users } from "lucide-react";
+import { Plus, Search, Stethoscope, TriangleAlert, Users } from "lucide-react";
 import { useState } from "react";
 import { PersonForm } from "@/components/PersonForm";
 import { Avatar, Button, Checkbox, Input, Pagination, Select, Skeleton, cx } from "@/components/ui";
 import type { City, Page, Person, State } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
+import { useUndeliverable } from "@/lib/useDelivery";
 
 export interface Picked {
   id: number;
@@ -44,6 +45,10 @@ export function RecipientPicker({ value, onChange }: { value: Selection; onChang
   };
 
   const pageItems = list.data?.items ?? [];
+  // Warn on the rows shown and on anyone ticked, even from another page or tab.
+  const allPicked = [...Object.values(value.dentists), ...Object.values(value.executives)];
+  const undeliverable = useUndeliverable([...pageItems.map((p) => p.pincode), ...allPicked.map((p) => p.pincode)]);
+  const blockedPicks = allPicked.filter((p) => undeliverable[p.pincode]);
   const allOnPage = pageItems.length > 0 && pageItems.every((p) => selected[p.id]);
   const togglePage = () => {
     const next = { ...selected };
@@ -144,6 +149,11 @@ export function RecipientPicker({ value, onChange }: { value: Selection; onChang
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-neutral-900">{p.name}</span>
                       <span className="block truncate text-xs text-neutral-500">{p.detail ? `${p.detail} · ` : ""}{p.address_line1}</span>
+                      {undeliverable[p.pincode] && (
+                        <span className="mt-0.5 flex items-center gap-1 text-xs font-medium text-amber-700">
+                          <TriangleAlert className="h-3 w-3 shrink-0" /> Delivery not available to {p.pincode}
+                        </span>
+                      )}
                     </span>
                     <span className="hidden text-right text-xs sm:block">
                       <span className="block font-medium text-neutral-700">{p.city_name}</span>
@@ -157,6 +167,12 @@ export function RecipientPicker({ value, onChange }: { value: Selection; onChang
         </ul>
       </div>
       {list.data && <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} />}
+      {blockedPicks.length > 0 && (
+        <p role="status" className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Delivery isn&apos;t available for {blockedPicks.map((p) => `${p.name} (${p.pincode})`).join(", ")}. Untick them, or those packages will fail to book.</span>
+        </p>
+      )}
 
       <PersonForm
         kind={kind}

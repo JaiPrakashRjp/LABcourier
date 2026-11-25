@@ -1,9 +1,10 @@
 "use client";
 
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api, ApiError, errorMessage } from "@/lib/api";
+import { useUndeliverable } from "@/lib/useDelivery";
 import type { Person, PersonKind, PincodeInfo } from "@/lib/types";
 import { Alert, Button, Field, Input, Modal, PhoneInput } from "./ui";
 
@@ -86,6 +87,9 @@ export function PersonForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Senders are only picked up from, so only people who receive packages are checked.
+  const undeliverable = useUndeliverable(kind === "senders" ? [] : [form.pincode]);
+  const noDelivery = undeliverable[form.pincode];
 
   useEffect(() => {
     if (open) {
@@ -216,6 +220,11 @@ export function PersonForm({
                 <Input value={place ? `${place.city_name}, ${place.state_name}` : ""} disabled placeholder="Filled from the pincode" />
               </Field>
             </div>
+            {noDelivery && (
+              <p role="status" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" /> {noDelivery}. Packages sent here will fail to book.
+              </p>
+            )}
           </div>
         </div>
 
