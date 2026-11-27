@@ -160,6 +160,22 @@ def _key(value: str | None) -> str:
     return re.sub(r"[^a-z0-9]+", "_", (value or "").lower()).strip("_")
 
 
+# Names the expected delivery date can come under. Never the plain "delivery_date": that is the actual delivery.
+EXPECTED_DATE_KEYS = (
+    "promised_delivery_date", "estimated_delivery_date", "estimatedDeliveryDate", "expected_delivery_date",
+    "expectedDeliveryDate", "promised_date", "first_promised_date", "edd",
+)
+
+
+def _expected_date(data: dict):
+    """The expected delivery date in a Shadowfax order or webhook row, whichever name it comes under."""
+    for key in EXPECTED_DATE_KEYS:
+        found = parse_date(data.get(key))
+        if found:
+            return found
+    return None
+
+
 def map_status(status_id: str | None, reverse: bool = False) -> ShipmentStatus:
     # Unknown codes are an open set per Shadowfax; treat them as still moving.
     return (REVERSE_STATUS_MAP if reverse else STATUS_MAP).get(_key(status_id), S.IN_TRANSIT)
@@ -415,8 +431,11 @@ class ShadowfaxAdapter(CourierAdapter):
                 description=order.get("status_display") or order["status"], location=None,
                 event_at=parse_datetime(None), raw=None,
             )
-        return TrackingResult(tracking_number=awb, events=events, current=current,
-                              expected_date=parse_date(order.get("promised_delivery_date")))
+        expected = _expected_date(order) or _expected_date(row)
+        if not expected:
+            # Say which fields did come, so a differently named date field is easy to spot in the logs.
+            log.info("No delivery date in tracking for %s; order fields: %s", awb, sorted(order.keys()))
+        return TrackingResult(tracking_number=awb, events=events, current=current, expected_date=expected)
 
     def track(self, tracking_numbers: list[str]) -> list[TrackingResult]:
         results = []
@@ -461,7 +480,6 @@ class ShadowfaxAdapter(CourierAdapter):
                 event_at=when,
                 raw=row,
                 # Only filled when the webhook template includes {estimatedDeliveryDate}.
-                expected_date=parse_date(row.get("estimated_delivery_date") or row.get("estimatedDeliveryDate")
-                                         or row.get("promised_delivery_date") or row.get("edd")),
+                expected_date=_expected_date(row),
             )))
         return parsed

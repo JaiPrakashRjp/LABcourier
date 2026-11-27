@@ -25,9 +25,17 @@ def parse_datetime(value: str | None, time_value: str | None = None) -> datetime
 
 
 def parse_date(value: str | None) -> date | None:
-    if not value:
+    """A calendar date from the formats couriers send: 2026-11-30, 2026-11-30T18:00:00Z, 30-11-2026, 30 Nov 2026."""
+    if not value or not isinstance(value, str):
         return None
+    text = value.strip()
     try:
-        return date.fromisoformat(value.strip()[:10])
+        return date.fromisoformat(text[:10])
     except ValueError:
-        return None
+        pass
+    for fmt, size in (("%d-%m-%Y", 10), ("%d/%m/%Y", 10), ("%d %b %Y", 11), ("%d-%b-%Y", 11)):
+        try:
+            return datetime.strptime(text[:size].strip(), fmt).date()
+        except ValueError:
+            continue
+    return None
